@@ -1198,6 +1198,7 @@
     log("No blocks declared.");
     // proceed to damage
     doCombatIfReady();
+    scheduleAIAuto();
   });
 
   document.getElementById("btnPass").addEventListener("click", () => {
@@ -1212,7 +1213,16 @@
       doCombatIfReady();
       return;
     }
-
+    // If you are defending during AI combat, Pass = "blocks locked in"
+    if (state.phase === "COMBAT" && state.active === 1 && ui.selectingMode === "BLOCKERS") {
+      ui.selectingMode = null;
+      ui._pickedBlocker = null;
+      ui.message = "";
+      log("Blocks locked in.");
+      doCombatIfReady();     // proceeds to damage / MAIN2
+      scheduleAIAuto();      // resumes AI autoplay (added in step 2 below)
+      return;
+    }
     // If targeting is pending, do nothing (force target)
     if (ui.selectingMode === "TARGET") {
       log("Choose a target first. (Tip: tap a creature, or tap the status pill to target the opponent.)");
