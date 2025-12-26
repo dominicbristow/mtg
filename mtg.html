@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MTG Mobile Sim</title>
+    <style>
+        :root { --bg: #1a1a1a; --card-bg: #2c2c2c; --text: #eee; --accent: #4a90e2; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        #game-board { flex: 1; display: flex; flex-direction: column; padding: 10px; gap: 10px; }
+        .zone { border: 1px solid #444; border-radius: 8px; padding: 5px; display: flex; gap: 5px; overflow-x: auto; min-height: 80px; align-items: center; }
+        .player-info { display: flex; justify-content: space-between; font-weight: bold; background: #333; padding: 5px 10px; border-radius: 5px; }
+        .card { width: 60px; height: 85px; background: var(--card-bg); border: 2px solid #666; border-radius: 4px; flex-shrink: 0; font-size: 10px; padding: 4px; display: flex; flex-direction: column; justify-content: space-between; position: relative; transition: transform 0.2s; }
+        .card.tapped { transform: rotate(15deg) translateY(5px); opacity: 0.7; border-color: #aa0000; }
+        .card.land { background: #3d4d3d; }
+        .card.creature { background: #4d3d3d; }
+        .controls { background: #222; padding: 10px; display: flex; gap: 10px; justify-content: center; border-top: 1px solid #444; }
+        button { background: var(--accent); border: none; color: white; padding: 12px 20px; border-radius: 5px; font-weight: bold; font-size: 16px; }
+        button:disabled { background: #555; }
+        #log { font-size: 12px; height: 60px; overflow-y: auto; background: #000; padding: 5px; color: #0f0; }
+        .mana-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #4caf50; margin-right: 2px; }
+    </style>
+</head>
+<body>
+
+<div id="game-board">
+    <div class="player-info" id="ai-stats">AI: 20 HP | Hand: 7</div>
+    <div class="zone" id="ai-battlefield"></div>
+    <div id="log">Welcome to MTG Sim. Your Turn.</div>
+    <div class="zone" id="player-battlefield"></div>
+    <div class="player-info" id="player-stats">YOU: 20 HP | Hand: 7 | Mana: 0</div>
+    <div class="zone" id="player-hand"></div>
+</div>
+
+<div class="controls">
+    <button id="btn-play-land">Play Land</button>
+    <button id="btn-next">Next Phase</button>
+</div>
+
+<script>
+// --- Game Data & State ---
+const CARD_TYPES = { LAND: 'land', CREATURE: 'creature' };
+let state = {
+    p_hp: 20, p_hand: [], p_field: [], p_mana: 0, p_landPlayed: false,
+    ai_hp: 20, ai_hand: [], ai_field: [], ai_mana: 0, ai_landPlayed: false,
+    phase: 'MAIN1', // MAIN1, COMBAT, MAIN2, AI_TURN
+    turn: 1
+};
+
+function createCard(type, name, cost = 0, p = 0, t = 0) {
+    return { type, name, cost, p, t, tapped: false, summoningSickness: true, id: Math.random() };
+}
+
+function initDeck() {
+    let deck = [];
+    for(let i=0; i<10; i++) deck.push(createCard(CARD_TYPES.LAND, "Forest"));
+    for(let i=0; i<10; i++) deck.push(createCard(CARD_TYPES.CREATURE, "Elf", 1, 1, 1));
+    for(let i=0; i<5; i++) deck.push(createCard(CARD_TYPES.CREATURE, "Beast", 3, 3, 3));
+    return deck.sort(() => Math.random() - 0.5);
+}
+
+state.p_hand = initDeck().slice(0, 7);
+state.ai_hand = initDeck().slice(0, 7);
+
+// --- Core Logic ---
+function updateUI() {
+    document.getElementById('player-stats').innerHTML = `YOU: ${state.p_hp} HP | Mana: ${state.p_mana}`;
+    document.getElementById('ai-stats').innerHTML = `AI: ${state.ai_hp} HP | Hand: ${state.ai_hand.length}`;
+    
+    renderZone('player-hand', state.p_hand, true);
+    renderZone('player-battlefield', state.p_field);
+    renderZone('ai-battlefield', state.ai_field);
+    
+    document.getElementById('btn-next').innerText = `Phase: ${state.phase}`;
+    document.getElementById('btn-play-land').disabled = (state.p_landPlayed || state.phase.includes('AI'));
+}
+
+function renderZone(id, cards, isHand = false) {
+    const el = document.getElementById(id);
+    el.innerHTML = '';
+    cards.forEach(card => {
+        const div = document.createElement('div');
+        div.className = `card ${card.type} ${card.tapped ? 'tapped' : ''}`;
+        div.innerHTML = `<b>${card.name}</b><br>${card.type === 'creature' ? `${card.p}/${card.t}` : 'M'}`;
+        if (isHand) div.onclick = () => playCard(card);
+        else if (id === 'player-battlefield' && card.type === 'land') div.onclick = () => tapLand(card);
+        el.appendChild(div);
+    });
+}
+
+function log(msg) {
+    const l = document.getElementById('log');
+    l.innerHTML = msg + "<br>" + l.innerHTML;
+}
+
+function tapLand(card) {
+    if (card.tapped || state.phase.startsWith('AI')) return;
+    card.tapped = true;
+    state.p_mana++;
+    updateUI();
+}
+
+function playCard(card) {
+    if (state.phase.startsWith('AI')) return;
+    if (card.type === CARD_TYPES.LAND && !state.p_landPlayed) {
+        state.p_field.push(card);
+        state.p_hand = state.p_hand.filter(c => c.id !== card.id);
+        state.p_landPlayed = true;
+        log("Played a Forest.");
+    } else if (card.type === CARD_TYPES.CREATURE && state.p_mana >= card.cost) {
+        state.p_mana -= card.cost;
+        state.p_field.push(card);
+        state.p_hand = state.p_hand.filter(c => c.id !== card.id);
+        log(`Cast ${card.name}.`);
+    }
+    updateUI();
+}
+
+function processCombat() {
+    log("--- Combat Phase ---");
+    // Simple logic: Player attacks with all untapped creatures
+    let damage = 0;
+    state.p_field.forEach(c => {
+        if (c.type === 'creature' && !c.summoningSickness && !c.tapped) {
+            c.tapped = true;
+            damage += c.p;
+        }
+    });
+    state.ai_hp -= damage;
+    log(`Attacked for ${damage} damage!`);
+    if(state.ai_hp <= 0) alert("YOU WIN!");
+}
+
+// --- AI Logic ---
+async function runAITurn() {
+    state.phase = 'AI_TURN';
+    updateUI();
+    log("AI is thinking...");
+    await new Promise(r => setTimeout(r, 1000));
+
+    // 1. Untap & Draw
+    state.ai_field.forEach(c => { c.tapped = false; c.summoningSickness = false; });
+    state.ai_hand.push(createCard(CARD_TYPES.CREATURE, "AI Bot", 2, 2, 2));
+
+    // 2. Play Land
+    let landIdx = state.ai_hand.findIndex(c => c.type === 'land');
+    if (landIdx > -1) {
+        state.ai_field.push(state.ai_hand.splice(landIdx, 1)[0]);
+        log("AI played a Forest.");
+    }
+
+    // 3. Play Creatures (Simplified Mana)
+    let lands = state.ai_field.filter(c => c.type === 'land').length;
+    let playable = state.ai_hand.findIndex(c => c.type === 'creature' && c.cost <= lands);
+    if (playable > -1) {
+        state.ai_field.push(state.ai_hand.splice(playable, 1)[0]);
+        log("AI cast a creature.");
+    }
+
+    // 4. Attack
+    let aiDmg = 0;
+    state.ai_field.forEach(c => {
+        if (c.type === 'creature' && !c.summoningSickness) {
+            aiDmg += c.p;
+            c.tapped = true;
+        }
+    });
+    state.p_hp -= aiDmg;
+    log(`AI attacks for ${aiDmg}!`);
+    
+    // 5. Cleanup
+    state.phase = 'MAIN1';
+    state.p_landPlayed = false;
+    state.p_mana = 0;
+    state.p_field.forEach(c => { c.tapped = false; c.summoningSickness = false; });
+    log("Your turn. (Untap/Draw)");
+    updateUI();
+}
+
+document.getElementById('btn-next').onclick = () => {
+    if (state.phase === 'MAIN1') {
+        state.phase = 'COMBAT';
+        processCombat();
+    } else if (state.phase === 'COMBAT') {
+        state.phase = 'MAIN2';
+    } else {
+        runAITurn();
+    }
+    updateUI();
+};
+
+updateUI();
+</script>
+</body>
+</html>
