@@ -44,9 +44,6 @@
     .card .stats { font-size: 12px; color: #b9c7db; display: flex; justify-content: space-between; }
     .tag { font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid #2a3442; color: #b9c7db; }
     .tap { opacity: 0.8; transform: rotate(10deg); }
-    .selected { outline: 2px solid #78a6ff; }
-    .danger { outline: 2px solid #ff6a6a; }
-    .good { outline: 2px solid #6affb2; }
 
     .bottomBar {
       position: fixed; bottom: 0; left: 0; right: 0;
@@ -101,6 +98,7 @@
         <div class="log mono" id="log"></div>
         <div class="hint">
           Tip: tap lands to add mana, then tap a card in your hand to cast it. Use “Attack” then tap your attackers.
+          <br/>While AI is playing its turn, it auto-advances phases with a 1s delay.
         </div>
       </div>
     </div>
@@ -133,7 +131,6 @@
 
   // ---------- Card Definitions (tiny pool) ----------
   // Costs: string like "1R", "G", "2".
-  // Types: Land, Creature, Instant, Sorcery
   const CARD_DB = {
     Forest: {
       name: "Forest",
@@ -225,12 +222,6 @@
   }
 
   // ---------- Core Rules (small but real) ----------
-  // - Turn structure: Untap, Draw, Main1, Combat (attackers/blockers/damage), Main2, End
-  // - Land play: 1 per turn in your main phases on your turn
-  // - Mana: tap lands (and elves) to add mana; spent to cast spells
-  // - Stack: instants can be cast in response; sorceries only in your main phases with empty stack
-  // - Combat: choose attackers; defending player chooses blocks; damage simultaneously
-  // - State-based: creatures die at 0 or less toughness (consider marked damage) -> graveyard
   const PHASES = ["UNTAP", "DRAW", "MAIN1", "COMBAT", "MAIN2", "END"];
   const speedAllows = (card, state) => {
     if (card.isLand) return false;
@@ -238,7 +229,7 @@
     const isSorcery = card.type.includes("Sorcery");
     const isCreature = card.type.includes("Creature");
 
-    const isYourTurn = state.active === 0; // 0 = human, 1 = AI (we treat human as "player 0")
+    const isYourTurn = state.active === 0; // 0 = human, 1 = AI
     const inMain = (state.phase === "MAIN1" || state.phase === "MAIN2");
     const stackEmpty = state.stack.length === 0;
 
@@ -248,7 +239,6 @@
   };
 
   function parseCost(cost) {
-    // e.g. "3R" => {C:3,R:1,G:0}
     let c = 0, R = 0, G = 0;
     const digits = cost.match(/\d+/);
     if (digits) c = parseInt(digits[0], 10);
@@ -272,7 +262,6 @@
     const need = parseCost(cost);
     pool.R -= need.R; pool.G -= need.G;
     let generic = need.C;
-    // pay generic with any remaining mana
     while (generic > 0) {
       if (pool.R > 0) { pool.R--; generic--; continue; }
       if (pool.G > 0) { pool.G--; generic--; continue; }
@@ -282,7 +271,6 @@
 
   // ---------- Game State ----------
   function newDeckRG() {
-    // Very small decks for speed; enough to feel like MTG.
     const list = [
       ...Array(10).fill("Forest"),
       ...Array(10).fill("Mountain"),
@@ -309,17 +297,16 @@
       manaPool: { R: 0, G: 0 },
       landPlaysLeft: 1,
       attackers: new Set(),
-      blockers: new Map(), // attackerId -> blockerId
-      priority: false
+      blockers: new Map()
     };
   }
 
   let state = null;
   let ui = {
-    selectedHandId: null,
     selectingMode: null, // "ATTACKERS" | "BLOCKERS" | "TARGET"
     pendingCast: null,   // {cardId, controller, chosenTarget}
-    message: ""
+    message: "",
+    _pickedBlocker: null
   };
 
   // ---------- Logging ----------
@@ -327,16 +314,62 @@
   function log(msg) {
     if (!state) return;
     state.log.push(msg);
-    // keep last 200 lines
     if (state.log.length > 200) state.log = state.log.slice(-200);
     render();
+  }
+
+  // ---------- AI autoplay (1 second between actions/phases) ----------
+  function clearAIAuto() {
+    if (!state || !state.aiAuto) return;
+    if (state.aiAuto.timer) clearTimeout(state.aiAuto.timer);
+    state.aiAuto.timer = null;
+    state.aiAuto.step = "ACT";
+  }
+
+  function scheduleAIAuto() {
+    if (!state || isGameOver()) return;
+
+    if (!AP().isAI) { clearAIAuto(); return; }
+
+    // pause if human must interact
+    if (ui.selectingMode === "TARGET") return;
+    if (state.phase === "COMBAT" && ui.selectingMode === "BLOCKERS") return;
+
+    if (state.aiAuto?.timer) return;
+
+    state.aiAuto.timer = setTimeout(() => {
+      state.aiAuto.timer = null;
+      aiAutoTick();
+    }, 1000);
+  }
+
+  function aiAutoTick() {
+    if (!state || isGameOver()) return;
+    if (!AP().isAI) { clearAIAuto(); return; }
+
+    if (ui.selectingMode === "TARGET") return;
+    if (state.phase === "COMBAT" && ui.selectingMode === "BLOCKERS") return;
+
+    if (!state.aiAuto) state.aiAuto = { timer: null, step: "ACT" };
+
+    if (state.aiAuto.step === "ACT") {
+      maybeRunAI();          // AI makes moves in this phase
+      state.aiAuto.step = "PASS";
+      render();
+      scheduleAIAuto();
+      return;
+    }
+
+    state.aiAuto.step = "ACT";
+    advancePhase();          // resolve stack / combat / move phase
+    render();
+    scheduleAIAuto();
   }
 
   // ---------- Setup ----------
   function draw(p, n=1) {
     for (let i=0;i<n;i++) {
       if (p.library.length === 0) {
-        // deck-out: lose
         p.life = 0;
         log(`${p.name} tried to draw from an empty library and loses.`);
         return;
@@ -348,26 +381,26 @@
   function startGame() {
     state = {
       turn: 1,
-      active: 0, // 0 human starts
+      active: 0, // human starts
       phaseIdx: 0,
       phase: PHASES[0],
-      stack: [], // {card, controller, target}
-      log: []
+      stack: [], // top is index 0
+      log: [],
+      aiAuto: { timer: null, step: "ACT" }
     };
-    ui = { selectedHandId: null, selectingMode: null, pendingCast: null, message: "" };
+    ui = { selectingMode: null, pendingCast: null, message: "", _pickedBlocker: null };
 
     const human = makePlayer("You", false);
     const ai = makePlayer("AI", true);
     state.players = [human, ai];
 
-    // draw 7
     draw(human, 7);
     draw(ai, 7);
 
-    // No mulligans in MicroMTG (keep it fast)
     log("Game start. You go first. (No mulligans in MicroMTG.)");
     enterPhase("UNTAP");
     render();
+    scheduleAIAuto();
   }
 
   // ---------- Helpers ----------
@@ -386,12 +419,9 @@
   function totalToughness(creature) { return (creature.toughness || 0) + (creature.tempBuff?.t || 0); }
 
   function cleanupEndOfTurn(p) {
-    // remove temp buffs, clear damage, clear combat selections
     for (const c of p.battlefield) {
       c.tempBuff = { p: 0, t: 0 };
       c.damageMarked = 0;
-      // summoning sickness wears off at begin of controller's turn, not EOT;
-      // we manage it in untap step.
     }
     p.attackers = new Set();
     p.blockers = new Map();
@@ -400,7 +430,6 @@
 
   function stateBasedActions() {
     for (const pl of state.players) {
-      // creatures dying
       for (let i = pl.battlefield.length - 1; i >= 0; i--) {
         const c = pl.battlefield[i];
         if (!c.type.includes("Creature")) continue;
@@ -436,12 +465,10 @@
     const ap = AP();
 
     if (phase === "UNTAP") {
-      // Untap permanents, refresh land play, clear mana pool
       ap.landPlaysLeft = 1;
       ap.manaPool.R = 0; ap.manaPool.G = 0;
       for (const c of ap.battlefield) {
         c.tapped = false;
-        // summoning sickness: if it was sick, it becomes not sick at the start of its controller's next turn
         if (c.type.includes("Creature")) c.summoningSick = false;
       }
       ap.attackers = new Set();
@@ -466,26 +493,18 @@
   }
 
   function advancePhase() {
-    // If stack non-empty, resolve first (top of stack)
     if (state.stack.length > 0) {
       resolveTopOfStack();
       return;
     }
 
-    // If in combat and attackers chosen, move through simple sub-steps internally:
-    // We model combat as:
-    // - active chooses attackers (human uses Attack mode; AI auto)
-    // - defending chooses blocks (human for defence; AI auto)
-    // - damage happens, then done.
     if (state.phase === "COMBAT") {
       doCombatIfReady();
       return;
     }
 
-    // Advance phase
     state.phaseIdx++;
     if (state.phaseIdx >= PHASES.length) {
-      // end turn
       cleanupEndOfTurn(P(0));
       cleanupEndOfTurn(P(1));
       state.active = 1 - state.active;
@@ -493,9 +512,7 @@
       state.phaseIdx = 0;
     }
     enterPhase(PHASES[state.phaseIdx]);
-
-    // AI take actions automatically on its turn
-    if (!isGameOver()) maybeRunAI();
+    scheduleAIAuto();
   }
 
   // ---------- Casting / Stack ----------
@@ -504,7 +521,6 @@
     const c = cardById(pl.battlefield, cardId);
     if (!c || c.tapped) return false;
 
-    // Land
     if (c.isLand && c.produces) {
       c.tapped = true;
       for (const k of Object.keys(c.produces)) pl.manaPool[k] = (pl.manaPool[k] || 0) + c.produces[k];
@@ -512,7 +528,6 @@
       return true;
     }
 
-    // Activated mana ability (elves)
     if (c.activated && c.activated.addMana) {
       c.tapped = true;
       for (const k of Object.keys(c.activated.addMana)) pl.manaPool[k] = (pl.manaPool[k] || 0) + c.activated.addMana[k];
@@ -541,50 +556,54 @@
     return true;
   }
 
+  // FIXED: creatures (and other no-target spells) now cast properly.
   function beginCast(playerIndex, handCardId) {
     const pl = P(playerIndex);
     const card = cardById(pl.hand, handCardId);
     if (!card || card.isLand) return false;
+
     if (!speedAllows(card, state)) return false;
     if (!canPay(card.cost, pl.manaPool)) return false;
 
-    // Determine target needs
-    if (card.spell && card.spell.target) {
+    const needsTarget = !!(card.spell && card.spell.target);
+
+    if (needsTarget) {
       ui.pendingCast = { cardId: handCardId, controller: playerIndex, chosenTarget: null };
       ui.selectingMode = "TARGET";
-      ui.message = "Choose a target.";
+      ui.message = "Choose a target. (Tap a creature, or tap the status pill to target the opponent.)";
       render();
       return true;
     }
 
-    // No target spell (none in this pool)
-    return false;
+    // No target: cast immediately onto the stack
+    const moved = removeById(pl.hand, handCardId);
+    pay(moved.cost, pl.manaPool);
+    state.stack.unshift({ card: moved, controller: playerIndex, target: null });
+    log(`${pl.name} casts ${moved.name}.`);
+    return true;
   }
 
   function chooseTarget(target) {
-    // target is {kind:"player", playerIndex} or {kind:"creature", playerIndex, creatureId}
     if (!ui.pendingCast) return;
-    ui.pendingCast.chosenTarget = target;
-    // finish cast
-    finishCast(ui.pendingCast.controller, ui.pendingCast.cardId, target);
+
+    const controller = ui.pendingCast.controller;
+    const pl = P(controller);
+    const card = cardById(pl.hand, ui.pendingCast.cardId);
+    if (!card) { ui.pendingCast = null; ui.selectingMode = null; ui.message = ""; render(); return; }
+
+    // Finish cast
+    const moved = removeById(pl.hand, ui.pendingCast.cardId);
+    pay(moved.cost, pl.manaPool);
+    state.stack.unshift({ card: moved, controller, target });
+    log(`${pl.name} casts ${moved.name}.`);
+
     ui.pendingCast = null;
     ui.selectingMode = null;
     ui.message = "";
+    ui._pickedBlocker = null;
+
     render();
-  }
-
-  function finishCast(playerIndex, handCardId, target) {
-    const pl = P(playerIndex);
-    const card = removeById(pl.hand, handCardId);
-    if (!card) return false;
-
-    pay(card.cost, pl.manaPool);
-    state.stack.unshift({ card, controller: playerIndex, target }); // top at index 0
-    log(`${pl.name} casts ${card.name}.`);
-
-    // Give opponent a chance to respond if AI/human
-    maybeRunAIResponse();
-    return true;
+    scheduleAIAuto();
   }
 
   function resolveTopOfStack() {
@@ -592,7 +611,6 @@
     const { card, controller, target } = item;
     const pl = P(controller);
 
-    // Creature spells become permanents
     if (card.type.includes("Creature")) {
       card.summoningSick = true;
       pl.battlefield.push(card);
@@ -602,7 +620,6 @@
       return;
     }
 
-    // Instants/Sorceries
     if (card.spell) {
       if (card.spell.kind === "damage") {
         applyDamageAnyTarget(card.spell.amount, target);
@@ -612,6 +629,7 @@
         applyPump(card.spell.p, card.spell.t, target);
       }
     }
+
     pl.graveyard.push(card);
     log(`${card.name} resolves.`);
     stateBasedActions();
@@ -669,8 +687,7 @@
     const def = NAP();
     const b = cardById(def.battlefield, blockerId);
     if (!b || !b.type.includes("Creature") || b.tapped) return;
-    // one blocker per attacker, one attacker per blocker (simplified)
-    // remove previous assignment of blocker
+
     for (const [atk, blk] of def.blockers.entries()) {
       if (blk === blockerId) def.blockers.delete(atk);
     }
@@ -683,62 +700,57 @@
     const ap = AP();
     const def = NAP();
 
-    // If active player hasn't declared attackers yet and is AI, do it automatically.
+    // AI declares attackers automatically when it's the attacker
     if (ap.isAI && ap.attackers.size === 0) {
       aiDeclareAttackers();
       render();
+      scheduleAIAuto();
       return;
     }
 
-    // If there are attackers and blocks not chosen yet for defending side, let AI auto-block.
     const attackers = [...ap.attackers].map(id => cardById(ap.battlefield, id)).filter(Boolean);
     if (attackers.length === 0) {
-      // no attackers -> move on
       log("No attackers.");
-      // end combat -> go to MAIN2
       state.phase = "MAIN2"; state.phaseIdx = PHASES.indexOf("MAIN2");
       log(`${ap.name}: Second main phase.`);
-      maybeRunAI();
+      scheduleAIAuto();
       render();
       return;
     }
 
-    // If defending player is AI, choose blocks
+    // Defending decisions
     if (def.isAI) {
       aiDeclareBlockers(attackers);
     } else {
-      // human defending: wait for "No Blocks" or assignments (we allow them to assign by tapping blockers)
-      // if they've not indicated they're done, just return and allow UI interactions.
-      if (ui.selectingMode === "BLOCKERS") return;
-      // If we aren't in blockers mode yet, enter it for human defence.
-      ui.selectingMode = "BLOCKERS";
-      ui.message = "Defend: tap a blocker, then tap an attacker to assign. Or press “No Blocks”.";
-      render();
+      // Human defending: enter blockers mode and WAIT until they press Pass/No Blocks
+      if (ui.selectingMode !== "BLOCKERS") {
+        ui.selectingMode = "BLOCKERS";
+        ui._pickedBlocker = null;
+        ui.message = "Defend: tap a blocker, then tap an attacker to assign. Press “No Blocks” or “Pass / Next” when done.";
+        render();
+      }
       return;
     }
 
-    // Damage step (single)
+    // Damage
     combatDamage(attackers);
     stateBasedActions();
 
-    // End combat
     ui.selectingMode = null;
+    ui._pickedBlocker = null;
     ui.message = "";
     ap.attackers = new Set();
     def.blockers = new Map();
 
-    // Go to MAIN2
     state.phase = "MAIN2"; state.phaseIdx = PHASES.indexOf("MAIN2");
     log(`${ap.name}: Second main phase.`);
-    maybeRunAI();
+    scheduleAIAuto();
     render();
   }
 
   function combatDamage(attackers) {
-    const ap = AP();
     const def = NAP();
 
-    // tap attackers
     for (const a of attackers) a.tapped = true;
 
     for (const a of attackers) {
@@ -766,17 +778,8 @@
     const ap = AP();
     if (!ap.isAI) return;
 
-    // AI acts in its phases; very basic but functional.
-    if (state.phase === "MAIN1" || state.phase === "MAIN2") {
-      aiMainPhase();
-    }
-    if (state.phase === "COMBAT") {
-      aiDeclareAttackers();
-    }
-    if (state.phase === "END") {
-      // pass
-    }
-    render();
+    if (state.phase === "MAIN1" || state.phase === "MAIN2") aiMainPhase();
+    if (state.phase === "COMBAT") aiDeclareAttackers();
   }
 
   function aiTapAllLands() {
@@ -793,51 +796,51 @@
     const ai = P(1);
     const human = P(0);
 
-    // play land if possible
     if (ai.landPlaysLeft > 0 && state.stack.length === 0) {
       const land = ai.hand.find(c => c.isLand);
       if (land) playLand(1, land.id);
     }
 
-    // tap lands to cast something
     aiTapAllLands();
 
-    // priority: kill lethal threats / face
-    // 1) If human low, try Lava Axe to win
     const axe = ai.hand.find(c => c.key === "LavaAxe");
-    if (axe && speedAllows(axe, state) && canPay(axe.cost, ai.manaPool)) {
-      finishCast(1, axe.id, { kind:"player", playerIndex: 0 });
+    if (axe && canPay(axe.cost, ai.manaPool) && state.stack.length === 0 && (state.phase === "MAIN1" || state.phase === "MAIN2")) {
+      // Lava Axe needs player target
+      const moved = removeById(ai.hand, axe.id);
+      pay(moved.cost, ai.manaPool);
+      state.stack.unshift({ card: moved, controller: 1, target: { kind:"player", playerIndex: 0 } });
+      log(`AI casts ${moved.name}.`);
       return;
     }
 
-    // 2) Cast creatures if possible (prefer bigger)
+    // Cast biggest creature if possible
     const creature = ai.hand
       .filter(c => c.type.includes("Creature"))
       .sort((a,b) => (parseCost(b.cost).C + parseCost(b.cost).R + parseCost(b.cost).G) - (parseCost(a.cost).C + parseCost(a.cost).R + parseCost(a.cost).G))[0];
-    if (creature && speedAllows(creature, state) && canPay(creature.cost, ai.manaPool)) {
-      // creatures have no target
-      const card = removeById(ai.hand, creature.id);
-      pay(card.cost, ai.manaPool);
-      state.stack.unshift({ card, controller: 1, target: null });
-      log(`AI casts ${card.name}.`);
+    if (creature && canPay(creature.cost, ai.manaPool) && state.stack.length === 0 && (state.phase === "MAIN1" || state.phase === "MAIN2")) {
+      const moved = removeById(ai.hand, creature.id);
+      pay(moved.cost, ai.manaPool);
+      state.stack.unshift({ card: moved, controller: 1, target: null });
+      log(`AI casts ${moved.name}.`);
       return;
     }
 
-    // 3) Burn: try to kill a creature, else face
+    // Burn: kill if possible else face (AI only in its main/instant windows; we keep simple here)
     const burn = ai.hand.find(c => c.key === "LightningBolt" || c.key === "Shock");
-    if (burn && speedAllows(burn, state) && canPay(burn.cost, ai.manaPool)) {
-      // choose best creature to kill
-      const enemyCreatures = human.battlefield.filter(c => c.type.includes("Creature"));
+    if (burn && canPay(burn.cost, ai.manaPool) && state.stack.length === 0) {
       const amount = burn.key === "LightningBolt" ? 3 : 2;
+      const enemyCreatures = human.battlefield.filter(c => c.type.includes("Creature"));
       const killable = enemyCreatures.find(ec => (totalToughness(ec) - ec.damageMarked) <= amount);
       const target = killable
         ? { kind:"creature", playerIndex:0, creatureId: killable.id }
         : { kind:"player", playerIndex:0 };
-      finishCast(1, burn.id, target);
+
+      const moved = removeById(ai.hand, burn.id);
+      pay(moved.cost, ai.manaPool);
+      state.stack.unshift({ card: moved, controller: 1, target });
+      log(`AI casts ${moved.name}.`);
       return;
     }
-
-    // else pass
   }
 
   function aiDeclareAttackers() {
@@ -847,35 +850,30 @@
 
     ai.attackers = new Set();
     const aiCreatures = ai.battlefield.filter(c => c.type.includes("Creature") && canAttackWith(c));
-    // simple: attack if it seems favourable or human is low
     const aiPower = aiCreatures.reduce((s,c)=>s+totalPower(c),0);
+
     if (human.life <= aiPower) {
       aiCreatures.forEach(c => ai.attackers.add(c.id));
       log("AI attacks with everything (lethal attempt).");
       return;
     }
 
-    // Otherwise attack with creatures that survive a block (rough heuristic)
     const humanCreatures = human.battlefield.filter(c => c.type.includes("Creature"));
     const biggestBlock = humanCreatures.sort((a,b)=>totalPower(b)-totalPower(a))[0];
     for (const c of aiCreatures) {
       if (!biggestBlock) { ai.attackers.add(c.id); continue; }
-      // if blocker power < our toughness, we might survive
       if (totalPower(biggestBlock) < totalToughness(c)) ai.attackers.add(c.id);
     }
     if (ai.attackers.size > 0) log("AI declares attackers.");
   }
 
   function aiDeclareBlockers(attackers) {
-    const def = P(0); // if AI defending, def would be AI; in our call def.isAI, so def=NAP()
     const ai = NAP();
-    const atkPlayer = AP();
     if (!ai.isAI) return;
 
     ai.blockers = new Map();
     const blockers = ai.battlefield.filter(c => c.type.includes("Creature") && !c.tapped);
-    // greedy: try to trade up / avoid lethal
-    // Sort attackers by power desc
+
     const sortedAtk = [...attackers].sort((a,b)=>totalPower(b)-totalPower(a));
     for (const a of sortedAtk) {
       const b = blockers.find(x => ![...ai.blockers.values()].includes(x.id));
@@ -883,32 +881,6 @@
       ai.blockers.set(a.id, b.id);
     }
     if (ai.blockers.size > 0) log("AI blocks.");
-  }
-
-  function maybeRunAIResponse() {
-    // If human casts on their turn, AI may respond with an instant if it has one and can pay.
-    if (isGameOver()) return;
-    const ai = P(1);
-    if (!ai.isAI) return;
-    if (state.stack.length === 0) return;
-
-    // only respond sometimes, and only if it helps (very simple)
-    aiTapAllLands();
-    const top = state.stack[0];
-    const burn = ai.hand.find(c => (c.key === "LightningBolt" || c.key === "Shock") && canPay(c.cost, ai.manaPool));
-    if (!burn) return;
-
-    // if top spell is pump, try burn the pumped creature (not too clever)
-    // else if human has a creature that can be killed, do it; else face.
-    const human = P(0);
-    const amount = burn.key === "LightningBolt" ? 3 : 2;
-    const killable = human.battlefield.find(ec => ec.type.includes("Creature") && (totalToughness(ec) - ec.damageMarked) <= amount);
-    const target = killable
-      ? { kind:"creature", playerIndex:0, creatureId: killable.id }
-      : { kind:"player", playerIndex:0 };
-
-    // Instants can always be cast if payable
-    finishCast(1, burn.id, target);
   }
 
   // ---------- UI Rendering ----------
@@ -919,15 +891,12 @@
   function render() {
     if (!state) return;
 
-    // Status
     const ap = AP();
-    const def = NAP();
     const status = isGameOver()
       ? winnerText()
       : `${ap.name} to act · Turn ${state.turn} · Phase: ${state.phase}${ui.message ? " · " + ui.message : ""}`;
     statusPill.textContent = status;
 
-    // Stack
     stackView.innerHTML = "";
     if (state.stack.length === 0) {
       stackView.innerHTML = `<div class="muted">Stack: (empty)</div>`;
@@ -944,24 +913,18 @@
       stackView.innerHTML = `<div class="muted" style="margin-bottom:8px">Stack (top first):</div>${items}`;
     }
 
-    // Log
     logEl.innerHTML = state.log.map(line => `<div>${escapeHtml(line)}</div>`).join("");
 
-    // Main view
     gameView.innerHTML = "";
+    gameView.appendChild(renderPlayerSection(1));
+    gameView.appendChild(renderPlayerSection(0));
 
-    // Opponent zones (AI at top)
-    gameView.appendChild(renderPlayerSection(1, true));
-    // You zones (bottom)
-    gameView.appendChild(renderPlayerSection(0, false));
-
-    // Buttons enable/disable
     document.getElementById("btnPass").disabled = isGameOver();
     document.getElementById("btnAttack").disabled = isGameOver() || state.phase !== "COMBAT" || state.active !== 0;
     document.getElementById("btnNoBlocks").disabled = isGameOver() || !(state.phase === "COMBAT" && state.active === 1 && ui.selectingMode === "BLOCKERS");
   }
 
-  function renderPlayerSection(playerIndex, compact) {
+  function renderPlayerSection(playerIndex) {
     const pl = P(playerIndex);
     const wrap = document.createElement("div");
     wrap.className = "zone";
@@ -972,17 +935,11 @@
       </div>
     `;
 
-    // Battlefield
     const bf = document.createElement("div");
     bf.className = "cards";
-    const battlefield = pl.battlefield;
-    if (battlefield.length === 0) {
-      bf.innerHTML = `<div class="muted">(Battlefield empty)</div>`;
-    } else {
-      battlefield.forEach(c => bf.appendChild(renderCard(playerIndex, c, "battlefield")));
-    }
+    if (pl.battlefield.length === 0) bf.innerHTML = `<div class="muted">(Battlefield empty)</div>`;
+    else pl.battlefield.forEach(c => bf.appendChild(renderCard(playerIndex, c, "battlefield")));
 
-    // Hand (only show yours)
     const hand = document.createElement("div");
     hand.className = "cards";
     if (playerIndex === 0) {
@@ -992,7 +949,6 @@
       hand.innerHTML = `<div class="muted">(AI hand hidden)</div>`;
     }
 
-    // Graveyard (compact list)
     const gy = document.createElement("div");
     gy.className = "muted";
     const gyNames = pl.graveyard.slice(-6).map(c => c.name).join(", ");
@@ -1000,6 +956,7 @@
 
     const row1 = document.createElement("div");
     row1.className = "zoneRow";
+
     const z1 = document.createElement("div");
     z1.className = "zone";
     z1.innerHTML = `<div class="zoneTitle"><strong>Battlefield</strong><span class="muted">${playerIndex===state.active ? "Active" : ""}</span></div>`;
@@ -1007,7 +964,7 @@
 
     const z2 = document.createElement("div");
     z2.className = "zone";
-    z2.innerHTML = `<div class="zoneTitle"><strong>${playerIndex===0 ? "Hand" : "Hand"}</strong><span class="muted"></span></div>`;
+    z2.innerHTML = `<div class="zoneTitle"><strong>Hand</strong><span class="muted"></span></div>`;
     z2.appendChild(hand);
 
     row1.appendChild(z1);
@@ -1015,15 +972,16 @@
 
     wrap.appendChild(row1);
     wrap.appendChild(gy);
-
     return wrap;
   }
 
   function renderCard(controllerIndex, card, zone) {
     const div = document.createElement("div");
     div.className = "card" + (card.tapped ? " tap" : "") + (zone !== "hand" ? " small" : "");
+
     const isCreature = card.type.includes("Creature");
     const stats = isCreature ? `${totalPower(card)}/${totalToughness(card)}${card.damageMarked ? " (dmg " + card.damageMarked + ")" : ""}` : "";
+
     const tags = [];
     if (card.isLand) tags.push("Land");
     if (isCreature && card.summoningSick) tags.push("Summoning sick");
@@ -1048,80 +1006,66 @@
   function onCardTap(controllerIndex, cardId, zone) {
     if (!state || isGameOver()) return;
 
-    // Target selection mode
+    // TARGET selection mode
     if (ui.selectingMode === "TARGET" && ui.pendingCast) {
-      // Determine legal targets based on pending card
       const pendingCard = cardById(P(ui.pendingCast.controller).hand, ui.pendingCast.cardId);
-      if (!pendingCard) return;
+      if (!pendingCard || !pendingCard.spell) return;
 
       const spell = pendingCard.spell;
-      if (!spell) return;
-
       if (spell.target === "player") {
         chooseTarget({ kind:"player", playerIndex: controllerIndex });
         return;
       }
-
       if (spell.target === "any") {
         if (zone === "battlefield") {
           const c = cardById(P(controllerIndex).battlefield, cardId);
-          if (c && c.type.includes("Creature")) {
-            chooseTarget({ kind:"creature", playerIndex: controllerIndex, creatureId: cardId });
-          }
-        } else {
-          // clicking player area isn't a thing; so allow player target by tapping status pill? (handled separately)
+          if (c && c.type.includes("Creature")) chooseTarget({ kind:"creature", playerIndex: controllerIndex, creatureId: cardId });
         }
         return;
       }
-
       if (spell.target === "creature") {
         if (zone === "battlefield") {
           const c = cardById(P(controllerIndex).battlefield, cardId);
-          if (c && c.type.includes("Creature")) {
-            chooseTarget({ kind:"creature", playerIndex: controllerIndex, creatureId: cardId });
-          }
+          if (c && c.type.includes("Creature")) chooseTarget({ kind:"creature", playerIndex: controllerIndex, creatureId: cardId });
         }
         return;
       }
     }
 
-    // Combat attacker selection (human only)
+    // Human attacker selection
     if (state.phase === "COMBAT" && state.active === 0 && controllerIndex === 0 && zone === "battlefield" && ui.selectingMode === "ATTACKERS") {
       toggleAttacker(cardId);
       return;
     }
 
-    // Combat blocker assignment (human defending)
+    // Human blocker picking (first tap chooses blocker)
     if (state.phase === "COMBAT" && state.active === 1 && controllerIndex === 0 && zone === "battlefield" && ui.selectingMode === "BLOCKERS") {
-      // first tap chooses blocker, then tap attacker in opponent battlefield.
       if (!ui._pickedBlocker) {
         const b = cardById(P(0).battlefield, cardId);
         if (!b || !b.type.includes("Creature") || b.tapped) return;
         ui._pickedBlocker = cardId;
-        ui.message = "Now tap an attacker to assign this blocker.";
+        ui.message = "Now tap an attacker to assign this blocker. (Or press Pass/No Blocks.)";
         render();
         return;
       }
       return;
     }
 
-    // If picked blocker and now tapping an attacker (AI battlefield)
+    // After choosing a blocker, tapping an attacker assigns it
     if (state.phase === "COMBAT" && state.active === 1 && controllerIndex === 1 && zone === "battlefield" && ui.selectingMode === "BLOCKERS" && ui._pickedBlocker) {
-      const attackerId = cardId;
-      toggleBlocker(ui._pickedBlocker, attackerId);
+      toggleBlocker(ui._pickedBlocker, cardId);
       ui._pickedBlocker = null;
-      ui.message = "Assign more blocks, or press “No Blocks”.";
+      ui.message = "Assign more blocks, or press “Pass / Next” when done.";
       render();
       return;
     }
 
-    // Regular interactions: only human can direct tap on their cards
+    // Only human can directly interact with their cards
     if (controllerIndex !== 0) return;
 
     const you = P(0);
 
     if (zone === "battlefield") {
-      // Tap for mana if yours
       tapForMana(0, cardId);
       render();
       return;
@@ -1131,39 +1075,28 @@
       const card = cardById(you.hand, cardId);
       if (!card) return;
 
-      // Land play
       if (card.isLand) {
-        if (!playLand(0, cardId)) {
-          log("You can only play a land on your turn, in a main phase, with an empty stack, and only once per turn.");
-        }
+        if (!playLand(0, cardId)) log("You can only play a land on your turn, in a main phase, with an empty stack, and only once per turn.");
         render();
         return;
       }
 
-      // Begin cast (may require target)
-      if (!speedAllows(card, state)) {
-        log("You can’t cast that right now (timing restriction).");
-        render();
-        return;
-      }
-      if (!canPay(card.cost, you.manaPool)) {
-        log("Not enough mana. Tap lands first.");
-        render();
-        return;
-      }
+      if (!speedAllows(card, state)) { log("You can’t cast that right now (timing restriction)."); render(); return; }
+      if (!canPay(card.cost, you.manaPool)) { log("Not enough mana. Tap lands first."); render(); return; }
+
       beginCast(0, cardId);
+      render();
       return;
     }
   }
 
-  // Allow targeting players by tapping status pill when in TARGET mode
+  // Tap status pill to target opponent (or a player) during targeting
   statusPill.addEventListener("click", () => {
     if (!state || !ui.pendingCast) return;
     const pendingCard = cardById(P(ui.pendingCast.controller).hand, ui.pendingCast.cardId);
     if (!pendingCard || !pendingCard.spell) return;
     const t = pendingCard.spell.target;
     if (t === "player" || t === "any") {
-      // default: target opponent when you tap status
       const opp = 1 - ui.pendingCast.controller;
       chooseTarget({ kind:"player", playerIndex: opp });
     }
@@ -1196,7 +1129,6 @@
     ui._pickedBlocker = null;
     ui.message = "";
     log("No blocks declared.");
-    // proceed to damage
     doCombatIfReady();
     scheduleAIAuto();
   });
@@ -1204,33 +1136,36 @@
   document.getElementById("btnPass").addEventListener("click", () => {
     if (!state || isGameOver()) return;
 
-    // If you're choosing attackers and press pass, lock them in and proceed.
+    // If you're choosing attackers, Pass locks them in.
     if (state.phase === "COMBAT" && state.active === 0 && ui.selectingMode === "ATTACKERS") {
       ui.selectingMode = null;
       ui.message = "";
       log("Attackers locked in.");
-      // Now defending player will block / no blocks
       doCombatIfReady();
+      scheduleAIAuto();
       return;
     }
-    // If you are defending during AI combat, Pass = "blocks locked in"
+
+    // CRITICAL FIX: If you're defending in AI combat, Pass locks blocks and proceeds.
     if (state.phase === "COMBAT" && state.active === 1 && ui.selectingMode === "BLOCKERS") {
       ui.selectingMode = null;
       ui._pickedBlocker = null;
       ui.message = "";
       log("Blocks locked in.");
-      doCombatIfReady();     // proceeds to damage / MAIN2
-      scheduleAIAuto();      // resumes AI autoplay (added in step 2 below)
+      doCombatIfReady();
+      scheduleAIAuto();
       return;
     }
-    // If targeting is pending, do nothing (force target)
+
+    // If targeting is pending, require a target first
     if (ui.selectingMode === "TARGET") {
-      log("Choose a target first. (Tip: tap a creature, or tap the status pill to target the opponent.)");
+      log("Choose a target first. (Tap a creature, or tap the status pill to target the opponent.)");
       return;
     }
 
     advancePhase();
     render();
+    scheduleAIAuto();
   });
 
   document.getElementById("btnConcede").addEventListener("click", () => {
@@ -1250,7 +1185,7 @@
   // ---------- Boot ----------
   startGame();
 
-  // Optional: register service worker if hosted over https (see sw.js below)
+  // Optional: register service worker if hosted over https (sw.js unchanged)
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(()=>{});
   }
