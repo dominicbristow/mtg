@@ -3,104 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Mobile Final</title>
+    <title>MTG Mobile: Blocking Edition</title>
     <style>
-        :root { --bg: #121212; --card-bg: #2a2a2e; --text: #e0e0e0; --accent: #3a7bd5; --danger: #cc0000; --header-h: 50px; --footer-h: 180px; }
-        * { box-sizing: border-box; touch-action: manipulation; }
+        :root { --bg: #121212; --card-bg: #2a2a2e; --text: #e0e0e0; --accent: #3a7bd5; --danger: #cc0000; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: sans-serif; }
+        /* THE KEY FIX: Body is exactly the screen height and cannot scroll */
+        body, html { 
+            margin: 0; padding: 0; 
+            height: 100vh; width: 100vw; 
+            overflow: hidden; 
+            background: var(--bg); color: var(--text); 
+            font-family: -apple-system, sans-serif;
+            display: flex; flex-direction: column;
+        }
 
-        /* HEADER: Fixed at top */
-        #header { position: absolute; top: 0; left: 0; right: 0; height: var(--header-h); background: #000; display: flex; align-items: center; justify-content: space-around; border-bottom: 2px solid var(--accent); z-index: 100; font-size: 12px; font-weight: bold; }
-        .phase-step { opacity: 0.3; }
-        .phase-step.active { opacity: 1; color: #00d4ff; }
+        /* FIXED HEADER */
+        #header { 
+            flex-shrink: 0; height: 44px; background: #000; 
+            display: flex; align-items: center; justify-content: space-around; 
+            border-bottom: 2px solid var(--accent); font-size: 11px; font-weight: bold; 
+        }
+        .phase-dot { opacity: 0.3; padding: 5px; }
+        .phase-dot.active { opacity: 1; color: #00d4ff; border-bottom: 2px solid #00d4ff; }
 
-        /* MAIN SCROLL AREA: Middle section */
-        #main-viewport { position: absolute; top: var(--header-h); bottom: var(--footer-h); left: 0; right: 0; overflow-y: auto; overflow-x: hidden; padding: 10px; -webkit-overflow-scrolling: touch; }
+        /* SCROLLABLE BATTLEFIELD */
+        #main-scroller { 
+            flex-grow: 1; overflow-y: auto; overflow-x: hidden; 
+            padding: 10px; display: flex; flex-direction: column; gap: 10px;
+        }
         
-        /* FOOTER: Fixed at bottom */
-        #footer { position: absolute; bottom: 0; left: 0; right: 0; height: var(--footer-h); background: #1a1a1a; border-top: 1px solid #444; z-index: 100; display: flex; flex-direction: column; }
+        /* FIXED FOOTER */
+        #footer { 
+            flex-shrink: 0; background: #1a1a1a; 
+            border-top: 1px solid #444; padding-bottom: env(safe-area-inset-bottom);
+        }
 
-        /* Card Layouts */
-        .zone { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0; min-height: 110px; align-items: center; }
-        .label { font-size: 10px; color: #888; text-transform: uppercase; margin-top: 10px; }
+        /* Cards and Zones */
+        .zone { display: flex; gap: 8px; overflow-x: auto; padding: 5px 0; min-height: 115px; align-items: center; }
+        .label { font-size: 10px; color: #777; text-transform: uppercase; margin-top: 5px; }
         
         .card { 
-            width: 80px; height: 110px; background: var(--card-bg); border: 2px solid #555; border-radius: 6px; 
+            width: 82px; height: 115px; background: var(--card-bg); border: 2px solid #555; border-radius: 6px; 
             flex-shrink: 0; display: flex; flex-direction: column; padding: 5px; font-size: 10px; position: relative;
         }
-        .card.tapped { transform: rotate(5deg) translateY(5px); filter: grayscale(0.8); opacity: 0.6; }
+        .card.tapped { transform: rotate(5deg); opacity: 0.6; filter: grayscale(0.5); }
         .card.attacking { border-color: orange; box-shadow: 0 0 8px orange; }
-        .card.blocking { border-color: #00ff00; box-shadow: 0 0 8px #00ff00; }
-        .card.dead { animation: dissolve 0.5s forwards; }
-        
-        .card-header { display: flex; justify-content: space-between; font-weight: bold; border-bottom: 1px solid #444; }
-        .card-stats { position: absolute; bottom: 3px; right: 5px; font-weight: bold; background: rgba(0,0,0,0.5); padding: 1px 3px; border-radius: 3px; }
-        .land-card { background: #1e2b1e; }
+        .card.blocking { border-color: #00ff00; box-shadow: 0 0 10px #00ff00; transform: translateY(-5px); }
+        .card.land-card { background: #1e2b1e; border-color: #3e5b3e; }
 
-        /* UI Controls */
-        #log { flex: 1; font-size: 11px; padding: 5px 10px; background: #000; color: #0f0; overflow-y: auto; border-bottom: 1px solid #333; }
-        .stats-row { display: flex; justify-content: space-between; padding: 5px 15px; font-size: 12px; }
-        .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
-        button { padding: 12px; border: none; border-radius: 5px; background: var(--accent); color: #fff; font-weight: bold; }
-        button:disabled { background: #444; }
+        .card-header { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 2px; border-bottom: 1px solid #444; }
+        .card-stats { position: absolute; bottom: 4px; right: 6px; font-weight: bold; background: #000; padding: 1px 4px; border-radius: 3px; }
 
-        @keyframes dissolve { from { opacity: 1; } to { opacity: 0; transform: scale(0.5); } }
+        /* Controls */
+        #log { height: 50px; font-size: 11px; padding: 5px 10px; background: #000; color: #4af; overflow-y: auto; border-bottom: 1px solid #333; }
+        .stats-bar { display: flex; justify-content: space-between; padding: 8px 15px; font-size: 13px; font-weight: bold; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; }
+        button { padding: 15px; border: none; border-radius: 8px; background: var(--accent); color: white; font-weight: bold; font-size: 14px; }
+        button:disabled { background: #333; color: #666; }
+        #btn-next { background: #28a745; }
     </style>
 </head>
 <body>
 
 <div id="header">
-    <span id="ph-0" class="phase-step">MAIN 1</span>
-    <span id="ph-1" class="phase-step">ATTACK</span>
-    <span id="ph-2" class="phase-step">BLOCK</span>
-    <span id="ph-3" class="phase-step">MAIN 2</span>
+    <span id="p-0" class="phase-dot">MAIN 1</span>
+    <span id="p-1" class="phase-dot">ATTACK</span>
+    <span id="p-2" class="phase-dot">BLOCK</span>
+    <span id="p-3" class="phase-dot">MAIN 2</span>
 </div>
 
-<div id="main-viewport">
-    <div class="label">AI Battlefield (HP: <span id="ai-hp">20</span>)</div>
+<div id="main-scroller">
+    <div class="label">AI Life: <span id="ai-hp">20</span> | Battlefield</div>
     <div class="zone" id="ai-field"></div>
     
-    <div class="label">Your Battlefield (HP: <span id="p-hp">20</span>)</div>
+    <div class="label">Your Life: <span id="p-hp">20</span> | Battlefield</div>
     <div class="zone" id="player-field"></div>
     
     <div class="label">Your Hand</div>
     <div class="zone" id="player-hand"></div>
-    <div style="height: 20px;"></div>
 </div>
 
 <div id="footer">
-    <div id="log">Welcome. Tap a Forest for mana, then play a creature.</div>
-    <div class="stats-row">
+    <div id="log">> Game started. Play a Forest.</div>
+    <div class="stats-bar">
         <span>MANA: <b id="p-mana">0</b></span>
-        <span>AI HAND: <b id="ai-hand-count">7</b></span>
+        <span>CARDS: <b id="p-hand-count">0</b></span>
     </div>
-    <div class="btns">
-        <button id="btn-land" onclick="playLand()">Play Land</button>
+    <div class="btn-group">
+        <button id="btn-land" onclick="playLand()">Land</button>
         <button id="btn-next" onclick="nextPhase()">Next Phase</button>
     </div>
 </div>
 
 <script>
-let state = {
-    p_hp: 20, p_hand: [], p_field: [], p_mana: 0, p_landPlayed: false,
-    ai_hp: 20, ai_hand: [], ai_field: [], ai_mana: 0,
-    phase: 0, isAITurn: false, attackers: []
-};
-
-const DB = [
-    { name: "Forest", type: "land", cost: 0, p: 0, t: 0, desc: "Tap for 1" },
-    { name: "Elf", type: "creature", cost: 1, p: 1, t: 1, desc: "Fast" },
-    { name: "Knight", type: "creature", cost: 2, p: 2, t: 2, desc: "Sturdy" },
-    { name: "Beast", type: "creature", cost: 4, p: 4, t: 4, desc: "Huge" }
+// --- Core Logic ---
+const CARDS = [
+    { name: "Forest", type: "land", cost: 0, p: 0, t: 0, desc: "{T}: +1 Mana" },
+    { name: "Soldier", type: "creature", cost: 1, p: 1, t: 1, desc: "Fast" },
+    { name: "Knight", type: "creature", cost: 2, p: 2, t: 2, desc: "Strong" },
+    { name: "Giant", type: "creature", cost: 4, p: 4, t: 4, desc: "Crusher" }
 ];
 
-function createCard(proto) { return { ...proto, id: Math.random(), tapped: false, sickness: true }; }
+let state = {
+    p_hp: 20, p_hand: [], p_field: [], p_mana: 0, p_landPlayed: false,
+    ai_hp: 20, ai_hand: [], ai_field: [],
+    phase: 0, // 0:Main1, 1:Attack, 2:Block, 3:Main2
+    isAITurn: false,
+    attackers: [], // IDs of creatures attacking
+    blockers: []   // IDs of creatures blocking
+};
 
 function init() {
     for(let i=0; i<7; i++) {
-        state.p_hand.push(createCard(DB[Math.floor(Math.random() * 2)]));
-        state.ai_hand.push(createCard(DB[Math.floor(Math.random() * 2)]));
+        state.p_hand.push({...CARDS[Math.floor(Math.random()*2)], id: Math.random()});
+        state.ai_hand.push({...CARDS[Math.floor(Math.random()*2)], id: Math.random()});
     }
     render();
 }
@@ -109,18 +126,26 @@ function render() {
     document.getElementById('p-hp').innerText = state.p_hp;
     document.getElementById('ai-hp').innerText = state.ai_hp;
     document.getElementById('p-mana').innerText = state.p_mana;
-    document.getElementById('ai-hand-count').innerText = state.ai_hand.length;
+    document.getElementById('p-hand-count').innerText = state.p_hand.length;
 
-    document.querySelectorAll('.phase-step').forEach((el, i) => {
-        el.className = (i === state.phase && !state.isAITurn) ? 'phase-step active' : 'phase-step';
+    document.querySelectorAll('.phase-dot').forEach((el, i) => {
+        el.className = (i === state.phase) ? "phase-dot active" : "phase-dot";
     });
 
     drawZone('player-hand', state.p_hand, 'hand');
     drawZone('player-field', state.p_field, 'field');
     drawZone('ai-field', state.ai_field, 'ai');
-    
+
     document.getElementById('btn-land').disabled = state.p_landPlayed || state.phase !== 0 || state.isAITurn;
-    document.getElementById('btn-next').innerText = state.phase === 3 ? "End Turn" : "Next Phase";
+    
+    let btn = document.getElementById('btn-next');
+    if (state.isAITurn && state.phase === 2) {
+        btn.innerText = "Confirm Blocks";
+        btn.disabled = false;
+    } else {
+        btn.innerText = state.phase === 3 ? "End Turn" : "Next Phase";
+        btn.disabled = state.isAITurn;
+    }
 }
 
 function drawZone(id, cards, type) {
@@ -128,117 +153,141 @@ function drawZone(id, cards, type) {
     el.innerHTML = '';
     cards.forEach(c => {
         const div = document.createElement('div');
-        const attacking = state.attackers.includes(c.id);
-        div.className = `card ${c.type==='land'?'land-card':''} ${c.tapped?'tapped':''} ${attacking?'attacking':''}`;
+        const isAttacking = state.attackers.includes(c.id);
+        const isBlocking = state.blockers.includes(c.id);
+        
+        div.className = `card ${c.type==='land'?'land-card':''} ${c.tapped?'tapped':''} ${isAttacking?'attacking':''} ${isBlocking?'blocking':''}`;
         div.innerHTML = `<div class="card-header"><span>${c.name}</span><span>${c.type==='creature'?c.cost:''}</span></div>
-                         <div style="font-size:8px; margin-top:5px">${c.desc}</div>
+                         <div style="font-size:8px; margin-top:5px; color:#aaa">${c.desc}</div>
                          ${c.type==='creature'?`<div class="card-stats">${c.p}/${c.t}</div>`:''}`;
-        div.onclick = () => handleClick(c, type);
+        
+        div.onclick = () => handleTap(c, type);
         el.appendChild(div);
     });
 }
 
-function handleClick(card, zone) {
-    if (state.isAITurn) return;
-    if (zone === 'hand') {
-        if (card.type === 'land' && !state.p_landPlayed && state.phase === 0) {
-            state.p_field.push(card);
+function handleTap(card, zone) {
+    if (state.isAITurn && state.phase !== 2) return;
+
+    if (zone === 'hand' && state.phase === 0) {
+        if (card.type === 'land' && !state.p_landPlayed) {
+            state.p_field.push({...card, tapped: false, sick: false});
             state.p_hand = state.p_hand.filter(x => x.id !== card.id);
             state.p_landPlayed = true;
-        } else if (card.type === 'creature' && state.p_mana >= card.cost && state.phase === 0) {
+        } else if (card.type === 'creature' && state.p_mana >= card.cost) {
             state.p_mana -= card.cost;
-            state.p_field.push(card);
+            state.p_field.push({...card, tapped: false, sick: true});
             state.p_hand = state.p_hand.filter(x => x.id !== card.id);
         }
     } else if (zone === 'field') {
         if (card.type === 'land' && !card.tapped) {
             card.tapped = true; state.p_mana++;
-        } else if (card.type === 'creature' && state.phase === 1 && !card.sickness && !card.tapped) {
-            if (state.attackers.includes(card.id)) state.attackers = state.attackers.filter(x=>x!==card.id);
-            else state.attackers.push(card.id);
+        } else if (card.type === 'creature' && state.phase === 1) { // Choose Attackers
+            if (!card.sick && !card.tapped) {
+                if (state.attackers.includes(card.id)) state.attackers = state.attackers.filter(id => id !== card.id);
+                else state.attackers.push(card.id);
+            }
+        } else if (card.type === 'creature' && state.phase === 2 && state.isAITurn) { // Choose Blockers
+            if (!card.tapped) {
+                if (state.blockers.includes(card.id)) state.blockers = state.blockers.filter(id => id !== card.id);
+                else if (state.blockers.length < state.attackers.length) state.blockers.push(card.id);
+            }
         }
     }
     render();
 }
 
-function msg(text) {
+function log(m) {
     const l = document.getElementById('log');
-    l.innerHTML = `> ${text}<br>${l.innerHTML}`;
+    l.innerHTML = `> ${m}<br>${l.innerHTML}`;
 }
 
 async function nextPhase() {
-    if (state.phase === 1) { // Resolve Combat
+    if (state.phase === 1) { // Resolve Player Attack
         state.phase = 2;
-        render();
         let dmg = 0;
         state.attackers.forEach(id => {
             let c = state.p_field.find(x => x.id === id);
             c.tapped = true;
-            let blocker = state.ai_field.find(x => x.type === 'creature' && !x.tapped);
-            if (blocker) {
-                msg(`AI blocked ${c.name} with ${blocker.name}`);
-                blocker.tapped = true;
-                // Simple lethal check
-                if (blocker.p >= c.t) { state.p_field = state.p_field.filter(x=>x.id!==c.id); msg(`Your ${c.name} died.`); }
-                if (c.p >= blocker.t) { state.ai_field = state.ai_field.filter(x=>x.id!==blocker.id); msg(`AI's ${blocker.name} died.`); }
+            let aiBlocker = state.ai_field.find(x => x.type === 'creature' && !x.tapped);
+            if (aiBlocker) {
+                log(`AI blocked ${c.name} with ${aiBlocker.name}`);
+                aiBlocker.tapped = true;
+                if (aiBlocker.p >= c.t) { state.p_field = state.p_field.filter(x=>x.id!==c.id); log(`Your ${c.name} died.`); }
+                if (c.p >= aiBlocker.t) { state.ai_field = state.ai_field.filter(x=>x.id!==aiBlocker.id); log(`AI's ${aiBlocker.name} died.`); }
             } else {
                 dmg += c.p;
             }
         });
         state.ai_hp -= dmg;
         state.attackers = [];
-        msg(`Dealt ${dmg} damage.`);
+        log(`You dealt ${dmg} damage.`);
+        state.phase = 3;
+    } else if (state.isAITurn && state.phase === 2) { // Resolve AI Attack (User blocked)
+        let dmg = 0;
+        state.attackers.forEach((id, index) => {
+            let aiC = state.ai_field.find(x => x.id === id);
+            let pBlockerId = state.blockers[index]; // Simple 1-to-1 matching for this sim
+            if (pBlockerId) {
+                let pC = state.p_field.find(x => x.id === pBlockerId);
+                log(`Blocked ${aiC.name} with ${pC.name}`);
+                pC.tapped = true;
+                if (pC.p >= aiC.t) state.ai_field = state.ai_field.filter(x=>x.id!==aiC.id);
+                if (aiC.p >= pC.t) state.p_field = state.p_field.filter(x=>x.id!==pC.id);
+            } else {
+                dmg += aiC.p;
+            }
+        });
+        state.p_hp -= dmg;
+        log(`AI dealt ${dmg} total.`);
+        endAITurn();
     } else if (state.phase === 3) {
-        aiTurn();
+        startAITurn();
     } else {
         state.phase++;
     }
     render();
 }
 
-async function aiTurn() {
+async function startAITurn() {
     state.isAITurn = true;
     state.phase = 0;
     render();
-    msg("AI Turn...");
-    await new Promise(r => setTimeout(r, 600));
+    log("AI is thinking...");
+    await new Promise(r => setTimeout(r, 800));
 
-    // Draw & Untap
-    state.ai_field.forEach(c => { c.tapped = false; c.sickness = false; });
-    state.ai_hand.push(createCard(DB[Math.floor(Math.random()*DB.length)]));
-
-    // AI Logic
+    // AI Draw & Play
+    state.ai_field.forEach(c => { c.tapped = false; c.sick = false; });
+    state.ai_hand.push({...CARDS[Math.floor(Math.random()*CARDS.length)], id: Math.random()});
+    
     let lands = state.ai_field.filter(x=>x.type==='land').length;
     let lIdx = state.ai_hand.findIndex(x=>x.type==='land');
     if(lIdx > -1) state.ai_field.push(state.ai_hand.splice(lIdx, 1)[0]);
-    
     let cIdx = state.ai_hand.findIndex(x=>x.type==='creature' && x.cost <= lands);
     if(cIdx > -1) state.ai_field.push(state.ai_hand.splice(cIdx, 1)[0]);
 
-    // AI Attack
-    let attackers = state.ai_field.filter(x=>x.type==='creature' && !x.sickness);
-    let dmg = 0;
-    attackers.forEach(c => {
-        c.tapped = true;
-        let blocker = state.p_field.find(x=>x.type==='creature' && !x.tapped);
-        if(blocker) {
-            msg(`You blocked ${c.name} with ${blocker.name}`);
-            blocker.tapped = true;
-            if (blocker.p >= c.t) state.ai_field = state.ai_field.filter(x=>x.id!==c.id);
-            if (c.p >= blocker.t) state.p_field = state.p_field.filter(x=>x.id!==blocker.id);
-        } else {
-            dmg += c.p;
-        }
-    });
-    state.p_hp -= dmg;
-    msg(`AI deals ${dmg} damage.`);
+    // AI Attack Step
+    let attackers = state.ai_field.filter(x => x.type==='creature' && !x.sick);
+    if (attackers.length > 0) {
+        state.phase = 2; // Move to Player Blocking phase
+        state.attackers = attackers.map(x => x.id);
+        log("AI Attacks! TAP your creatures to block, then press 'Confirm'.");
+    } else {
+        endAITurn();
+    }
+    render();
+}
 
-    // End AI Turn
+function endAITurn() {
     state.isAITurn = false;
-    state.p_landPlayed = false;
+    state.phase = 0;
+    state.attackers = [];
+    state.blockers = [];
     state.p_mana = 0;
-    state.p_field.forEach(c => { c.tapped = false; c.sickness = false; });
-    state.p_hand.push(createCard(DB[Math.floor(Math.random()*DB.length)]));
+    state.p_landPlayed = false;
+    state.p_field.forEach(c => { c.tapped = false; c.sick = false; });
+    state.p_hand.push({...CARDS[Math.floor(Math.random()*CARDS.length)], id: Math.random()});
+    log("Your turn. Untap & Draw.");
     render();
 }
 
