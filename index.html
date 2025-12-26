@@ -11,13 +11,17 @@
     header {
       padding: 10px 12px;
       background: #151b22;
-      position: sticky; top: 0; z-index: 3;
+      position: sticky; top: 0; z-index: 10;
       border-bottom: 1px solid #222a35;
     }
     header .row {
-      display: flex; gap: 10px;
-      align-items: center; justify-content: space-between;
-      flex-wrap: wrap;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: nowrap;               /* never wrap */
+      white-space: nowrap;
+      overflow: hidden;
     }
     .pill {
       padding: 6px 10px;
@@ -25,9 +29,14 @@
       border-radius: 999px;
       background: #0f141b;
       font-size: 13px;
+      min-width: 0;                    /* allow flex ellipsis */
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
+    #brandPill { flex: 0 0 auto; }
+    #statusPill { flex: 1 1 auto; text-align: right; }
 
-    .wrap { padding: 10px 12px 100px; max-width: 1100px; margin: 0 auto; }
+    .wrap { padding: 10px 12px 92px; max-width: 1100px; margin: 0 auto; }
 
     .panel {
       border: 1px solid #222a35;
@@ -37,22 +46,16 @@
       margin-bottom: 10px;
     }
     .panel h2 {
-      margin: 0; padding: 10px 12px;
+      margin: 0;
+      padding: 8px 12px;
       background: #151b22;
       border-bottom: 1px solid #222a35;
-      font-size: 14px; letter-spacing: 0.3px;
+      font-size: 13px;
+      letter-spacing: 0.2px;
       text-transform: uppercase;
       color: #b9c7db;
     }
     .panel .content { padding: 10px 12px; }
-
-    .zoneHeader {
-      display: flex; justify-content: space-between; align-items: baseline;
-      gap: 10px; flex-wrap: wrap;
-      margin-bottom: 8px;
-    }
-    .zoneHeader strong { font-size: 13px; }
-    .muted { color: #9db0c9; font-size: 12px; }
 
     /* Horizontal drawers */
     .hscroll {
@@ -69,8 +72,9 @@
     .hscroll::-webkit-scrollbar-thumb { background: #243041; border-radius: 999px; }
     .hscroll::-webkit-scrollbar-track { background: #0f141b; border-radius: 999px; }
 
+    /* Cards: compact by default; details via long-press tooltip */
     .card {
-      min-width: 150px;
+      min-width: 140px;
       max-width: 75vw;
       border: 1px solid #2a3442;
       background: #121822;
@@ -81,20 +85,31 @@
       scroll-snap-align: start;
       flex: 0 0 auto;
     }
-    .card.small { min-width: 130px; }
-    .card .name { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
-    .card .type { font-size: 12px; color: #a9bdd6; margin-bottom: 6px; }
-    .card .text { font-size: 12px; color: #d3def0; line-height: 1.25; white-space: pre-wrap; margin-bottom: 6px; }
-    .card .stats { font-size: 12px; color: #b9c7db; display: flex; justify-content: space-between; }
+    .card.small { min-width: 124px; }
+    .card .name { font-weight: 750; font-size: 13px; margin-bottom: 2px; }
+    .card .metaRow { display:flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .card .cost { font-size: 12px; color: #b9c7db; }
+    .card .stats { font-size: 12px; color: #b9c7db; }
+    .card .tags { margin-top: 6px; display:flex; gap:6px; flex-wrap:wrap; }
+
+    /* Hidden by default to de-busy UI */
+    .card .type, .card .text { display: none; }
+
     .tag { font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid #2a3442; color: #b9c7db; }
     .tap { opacity: 0.85; transform: rotate(10deg); }
 
+    .muted { color: #9db0c9; font-size: 12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+    /* Stack + log */
     .stackItem {
-      margin-bottom: 6px;
-      padding: 8px;
+      min-width: 180px;
       border: 1px dashed #2a3442;
       border-radius: 10px;
       background: #0f141b;
+      padding: 8px;
+      flex: 0 0 auto;
+      scroll-snap-align: start;
     }
     .badge { font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid #2a3442; color: #b9c7db; }
 
@@ -108,17 +123,17 @@
       border-radius: 12px;
       padding: 8px;
     }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 
+    /* Bottom bar */
     .bottomBar {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: #0c1016;
       border-top: 1px solid #222a35;
       padding: 10px 10px;
-      z-index: 5;
+      z-index: 20;
     }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-    button {
+    .actions { display: flex; flex-wrap: nowrap; gap: 8px; justify-content: center; align-items: center; }
+    button, select {
       border: 1px solid #2a3442; background: #121822; color: #e7edf5;
       padding: 10px 12px; border-radius: 12px;
       font-weight: 650; font-size: 14px;
@@ -126,22 +141,48 @@
     }
     button:disabled { opacity: 0.45; }
     button.primary { border-color: #3b6cff; background: #15223b; }
-    button.warn { border-color: #ff6a6a; background: #341717; }
     button.ok { border-color: #43d28a; background: #14301f; }
+    select { padding-right: 28px; }
 
-    .hint { color: #9db0c9; font-size: 12px; margin-top: 8px; }
+    /* Tooltip modal (long-press) */
+    .tooltipOverlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: none;
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+    .tooltipCard {
+      width: min(560px, 96vw);
+      background: #121822;
+      border: 1px solid #2a3442;
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.45);
+    }
+    .tooltipHeader {
+      display:flex; justify-content: space-between; align-items: center; gap: 10px;
+      margin-bottom: 8px;
+    }
+    .tooltipTitle { font-weight: 800; font-size: 14px; }
+    .tooltipClose {
+      border: 1px solid #2a3442; background: #0f141b; color: #e7edf5;
+      padding: 8px 10px; border-radius: 10px; font-weight: 700; font-size: 13px;
+    }
+    .tooltipBody { font-size: 13px; color: #d3def0; line-height: 1.35; white-space: pre-wrap; }
   </style>
 </head>
 <body>
 <header>
   <div class="row">
-    <div class="pill"><strong>MicroMTG</strong> · mobile</div>
+    <div class="pill" id="brandPill"><strong>MicroMTG</strong></div>
     <div class="pill" id="statusPill">Loading…</div>
   </div>
 </header>
 
 <div class="wrap">
-
   <div class="panel">
     <h2>AI Battlefield</h2>
     <div class="content" id="aiBattlefield"></div>
@@ -166,24 +207,35 @@
     <h2>Log</h2>
     <div class="content">
       <div class="log mono" id="log"></div>
-      <div class="hint">
-        Tip: tap lands to add mana, then tap a card in your hand to cast it.
-        During AI turns, phases auto-advance with a 1 second delay.
-        <br/>Blocking: tap a blocker, then tap an attacker to assign. Press Pass/No Blocks when done.
+      <div class="muted" style="margin-top:8px">
+        Long-press cards (or the status pill) for details.
       </div>
     </div>
   </div>
-
 </div>
 
 <div class="bottomBar">
   <div class="actions">
-    <button class="primary" id="btnNew">New Game</button>
-    <button id="btnTapAll">Tap All Untapped Lands</button>
-    <button class="ok" id="btnAttack">Attack (Choose)</button>
-    <button id="btnNoBlocks">No Blocks</button>
     <button class="primary" id="btnPass">Pass / Next</button>
-    <button class="warn" id="btnConcede">Concede</button>
+    <button class="ok" id="btnAttack">Attack</button>
+    <button id="btnNoBlocks">No Blocks</button>
+    <select id="menu">
+      <option value="" selected>Menu ▾</option>
+      <option value="new">New Game</option>
+      <option value="tapall">Tap All Lands</option>
+      <option value="concede">Concede</option>
+    </select>
+  </div>
+</div>
+
+<!-- Tooltip modal -->
+<div class="tooltipOverlay" id="tooltipOverlay" aria-hidden="true">
+  <div class="tooltipCard">
+    <div class="tooltipHeader">
+      <div class="tooltipTitle" id="tooltipTitle">Details</div>
+      <button class="tooltipClose" id="tooltipClose">Close</button>
+    </div>
+    <div class="tooltipBody" id="tooltipBody"></div>
   </div>
 </div>
 
@@ -202,105 +254,53 @@
 
   // ---------- Card Definitions (tiny pool) ----------
   const CARD_DB = {
-    Forest: {
-      name: "Forest",
-      type: "Basic Land — Forest",
-      text: "Tap: Add G.",
-      isLand: true,
-      produces: { G: 1 }
-    },
-    Mountain: {
-      name: "Mountain",
-      type: "Basic Land — Mountain",
-      text: "Tap: Add R.",
-      isLand: true,
-      produces: { R: 1 }
-    },
-    GrizzlyBears: {
-      name: "Grizzly Bears",
-      type: "Creature — Bear",
-      cost: "1G",
-      text: "",
-      power: 2, toughness: 2
-    },
-    HillGiant: {
-      name: "Hill Giant",
-      type: "Creature — Giant",
-      cost: "3R",
-      text: "",
-      power: 3, toughness: 3
-    },
+    Forest: { name:"Forest", type:"Basic Land — Forest", text:"Tap: Add G.", isLand:true, produces:{G:1} },
+    Mountain: { name:"Mountain", type:"Basic Land — Mountain", text:"Tap: Add R.", isLand:true, produces:{R:1} },
+    GrizzlyBears: { name:"Grizzly Bears", type:"Creature — Bear", cost:"1G", text:"", power:2, toughness:2 },
+    HillGiant: { name:"Hill Giant", type:"Creature — Giant", cost:"3R", text:"", power:3, toughness:3 },
     LlanowarElves: {
-      name: "Llanowar Elves",
-      type: "Creature — Elf Druid",
-      cost: "G",
-      text: "Tap: Add G.",
-      power: 1, toughness: 1,
-      activated: { tap: true, addMana: { G: 1 } }
+      name:"Llanowar Elves", type:"Creature — Elf Druid", cost:"G",
+      text:"Tap: Add G.", power:1, toughness:1,
+      activated:{ tap:true, addMana:{G:1} }
     },
-    Shock: {
-      name: "Shock",
-      type: "Instant",
-      cost: "R",
-      text: "Deal 2 damage to any target.",
-      spell: { kind: "damage", amount: 2, target: "any" }
-    },
-    LightningBolt: {
-      name: "Lightning Bolt",
-      type: "Instant",
-      cost: "R",
-      text: "Deal 3 damage to any target.",
-      spell: { kind: "damage", amount: 3, target: "any" }
-    },
-    GiantGrowth: {
-      name: "Giant Growth",
-      type: "Instant",
-      cost: "G",
-      text: "Target creature gets +3/+3 until end of turn.",
-      spell: { kind: "pump", p: 3, t: 3, target: "creature" }
-    },
-    LavaAxe: {
-      name: "Lava Axe",
-      type: "Sorcery",
-      cost: "4R",
-      text: "Deal 5 damage to target player.",
-      spell: { kind: "damagePlayer", amount: 5, target: "player" }
-    }
+    Shock: { name:"Shock", type:"Instant", cost:"R", text:"Deal 2 damage to any target.", spell:{kind:"damage", amount:2, target:"any"} },
+    LightningBolt: { name:"Lightning Bolt", type:"Instant", cost:"R", text:"Deal 3 damage to any target.", spell:{kind:"damage", amount:3, target:"any"} },
+    GiantGrowth: { name:"Giant Growth", type:"Instant", cost:"G", text:"Target creature gets +3/+3 until end of turn.", spell:{kind:"pump", p:3, t:3, target:"creature"} },
+    LavaAxe: { name:"Lava Axe", type:"Sorcery", cost:"4R", text:"Deal 5 damage to target player.", spell:{kind:"damagePlayer", amount:5, target:"player"} }
   };
 
   function makeCard(key) {
-    const base = CARD_DB[key];
+    const b = CARD_DB[key];
     return {
-      id: uid(),
-      key,
-      name: base.name,
-      type: base.type,
-      text: base.text || "",
-      cost: base.cost || "",
-      isLand: !!base.isLand,
-      produces: base.produces || null,
-      power: base.power ?? null,
-      toughness: base.toughness ?? null,
+      id: uid(), key,
+      name: b.name,
+      type: b.type,
+      text: b.text || "",
+      cost: b.cost || "",
+      isLand: !!b.isLand,
+      produces: b.produces || null,
+      power: b.power ?? null,
+      toughness: b.toughness ?? null,
       damageMarked: 0,
       tapped: false,
       summoningSick: false,
       tempBuff: { p: 0, t: 0 },
-      activated: base.activated || null,
-      spell: base.spell || null
+      activated: b.activated || null,
+      spell: b.spell || null
     };
   }
 
   // ---------- Rules ----------
-  const PHASES = ["UNTAP", "DRAW", "MAIN1", "COMBAT", "MAIN2", "END"];
+  const PHASES = ["UNTAP","DRAW","MAIN1","COMBAT","MAIN2","END"];
 
-  const speedAllows = (card, state) => {
+  // NOTE: This is simplified timing (instants always allowed). Sorcery/creature only on your turn in main with empty stack.
+  const speedAllows = (card, playerIndex) => {
     if (card.isLand) return false;
-
     const isInstant = card.type.includes("Instant");
     const isSorcery = card.type.includes("Sorcery");
     const isCreature = card.type.includes("Creature");
 
-    const isYourTurn = state.active === 0; // 0 human, 1 AI
+    const isYourTurn = (state.active === playerIndex);
     const inMain = (state.phase === "MAIN1" || state.phase === "MAIN2");
     const stackEmpty = state.stack.length === 0;
 
@@ -310,30 +310,29 @@
   };
 
   function parseCost(cost) {
-    let c = 0, R = 0, G = 0;
+    let C = 0, R = 0, G = 0;
     const digits = cost.match(/\d+/);
-    if (digits) c = parseInt(digits[0], 10);
+    if (digits) C = parseInt(digits[0], 10);
     for (const ch of cost.replace(/\d+/g, "")) {
       if (ch === "R") R++;
       if (ch === "G") G++;
     }
-    return { C: c, R, G };
+    return { C, R, G };
   }
 
   function canPay(cost, pool) {
-    const need = parseCost(cost);
-    if ((pool.R || 0) < need.R) return false;
-    if ((pool.G || 0) < need.G) return false;
-    const colouredUsed = need.R + need.G;
-    const total = (pool.R || 0) + (pool.G || 0);
-    return total >= colouredUsed + need.C;
+    const n = parseCost(cost);
+    if ((pool.R||0) < n.R) return false;
+    if ((pool.G||0) < n.G) return false;
+    const coloured = n.R + n.G;
+    const total = (pool.R||0) + (pool.G||0);
+    return total >= coloured + n.C;
   }
 
   function pay(cost, pool) {
-    const need = parseCost(cost);
-    pool.R -= need.R;
-    pool.G -= need.G;
-    let generic = need.C;
+    const n = parseCost(cost);
+    pool.R -= n.R; pool.G -= n.G;
+    let generic = n.C;
     while (generic > 0) {
       if (pool.R > 0) { pool.R--; generic--; continue; }
       if (pool.G > 0) { pool.G--; generic--; continue; }
@@ -376,9 +375,24 @@
   let ui = {
     selectingMode: null, // "ATTACKERS" | "BLOCKERS" | "TARGET"
     pendingCast: null,   // {cardId, controller}
-    message: "",
+    statusHint: "",
+    combatHint: "",
     _pickedBlocker: null
   };
+
+  // Combat sub-steps (inside COMBAT phase)
+  // DECLARE_ATTACKERS -> DECLARE_BLOCKERS -> POSTBLOCK_ATTACKER -> POSTBLOCK_DEFENDER -> DAMAGE
+  function resetCombat() {
+    state.combat = {
+      step: "DECLARE_ATTACKERS",
+      passed: { attacker: false, defender: false }
+    };
+    P(state.active).attackers = new Set();
+    P(1 - state.active).blockers = new Map();
+    ui.selectingMode = null;
+    ui._pickedBlocker = null;
+    ui.combatHint = "";
+  }
 
   // ---------- DOM ----------
   const statusPill = document.getElementById("statusPill");
@@ -388,10 +402,15 @@
   const stackViewEl = document.getElementById("stackView");
   const logEl = document.getElementById("log");
 
+  const tooltipOverlay = document.getElementById("tooltipOverlay");
+  const tooltipTitle = document.getElementById("tooltipTitle");
+  const tooltipBody = document.getElementById("tooltipBody");
+  const tooltipClose = document.getElementById("tooltipClose");
+
   // ---------- Logging ----------
   function log(msg) {
     state.log.push(msg);
-    if (state.log.length > 250) state.log = state.log.slice(-250);
+    if (state.log.length > 260) state.log = state.log.slice(-260);
     render();
   }
 
@@ -410,6 +429,7 @@
     // pause if human must interact
     if (ui.selectingMode === "TARGET") return;
     if (state.phase === "COMBAT" && ui.selectingMode === "BLOCKERS") return;
+    if (state.phase === "COMBAT" && state.combat && state.combat.step === "POSTBLOCK_DEFENDER" && !AP().isAI) return;
 
     if (state.aiAuto.timer) return;
 
@@ -434,6 +454,14 @@
       return;
     }
 
+    // PASS step: in post-block windows, mark that side as passed.
+    if (state.phase === "COMBAT" && state.combat) {
+      const atk = state.active;
+      const def = 1 - state.active;
+      if (state.combat.step === "POSTBLOCK_ATTACKER" && atk === 1) state.combat.passed.attacker = true;
+      if (state.combat.step === "POSTBLOCK_DEFENDER" && def === 1) state.combat.passed.defender = true;
+    }
+
     state.aiAuto.step = "ACT";
     advancePhase();
     render();
@@ -452,8 +480,8 @@
     return null;
   }
 
-  function totalPower(creature) { return (creature.power || 0) + (creature.tempBuff?.p || 0); }
-  function totalToughness(creature) { return (creature.toughness || 0) + (creature.tempBuff?.t || 0); }
+  function totalPower(c) { return (c.power||0) + (c.tempBuff?.p||0); }
+  function totalToughness(c) { return (c.toughness||0) + (c.tempBuff?.t||0); }
 
   function draw(pl, n=1) {
     for (let i=0;i<n;i++) {
@@ -472,11 +500,12 @@
       active: 0,
       phaseIdx: 0,
       phase: PHASES[0],
-      stack: [], // top at index 0
+      stack: [],
       log: [],
-      aiAuto: { timer: null, step: "ACT" }
+      aiAuto: { timer: null, step: "ACT" },
+      combat: null
     };
-    ui = { selectingMode: null, pendingCast: null, message: "", _pickedBlocker: null };
+    ui = { selectingMode:null, pendingCast:null, statusHint:"", combatHint:"", _pickedBlocker:null };
 
     state.players = [makePlayer("You", false), makePlayer("AI", true)];
     draw(P(0), 7);
@@ -512,10 +541,7 @@
     }
   }
 
-  function isGameOver() {
-    return P(0).life <= 0 || P(1).life <= 0;
-  }
-
+  function isGameOver() { return P(0).life <= 0 || P(1).life <= 0; }
   function winnerText() {
     const h = P(0), a = P(1);
     if (h.life <= 0 && a.life <= 0) return "Draw game.";
@@ -542,7 +568,9 @@
       ap.blockers = new Map();
       ui.selectingMode = null;
       ui._pickedBlocker = null;
-      ui.message = "";
+      ui.statusHint = "";
+      ui.combatHint = "";
+      state.combat = null;
 
       log(`— Turn ${state.turn}: ${ap.name} —`);
       log(`${ap.name}: Untap.`);
@@ -558,21 +586,15 @@
     }
 
     if (phase === "MAIN1") log(`${ap.name}: Main phase.`);
-    if (phase === "COMBAT") log(`${ap.name}: Combat.`);
+    if (phase === "COMBAT") { log(`${ap.name}: Combat.`); resetCombat(); }
     if (phase === "MAIN2") log(`${ap.name}: Second main phase.`);
     if (phase === "END") log(`${ap.name}: End step.`);
   }
 
   function advancePhase() {
-    if (state.stack.length > 0) {
-      resolveTopOfStack();
-      return;
-    }
+    if (state.stack.length > 0) { resolveTopOfStack(); return; }
 
-    if (state.phase === "COMBAT") {
-      doCombatIfReady();
-      return;
-    }
+    if (state.phase === "COMBAT") { doCombatFlow(); return; }
 
     state.phaseIdx++;
     if (state.phaseIdx >= PHASES.length) {
@@ -594,18 +616,16 @@
 
     if (c.isLand && c.produces) {
       c.tapped = true;
-      for (const k of Object.keys(c.produces)) pl.manaPool[k] = (pl.manaPool[k] || 0) + c.produces[k];
+      for (const k of Object.keys(c.produces)) pl.manaPool[k] = (pl.manaPool[k]||0) + c.produces[k];
       log(`${pl.name} taps ${c.name} for mana.`);
       return true;
     }
-
     if (c.activated && c.activated.addMana) {
       c.tapped = true;
-      for (const k of Object.keys(c.activated.addMana)) pl.manaPool[k] = (pl.manaPool[k] || 0) + c.activated.addMana[k];
+      for (const k of Object.keys(c.activated.addMana)) pl.manaPool[k] = (pl.manaPool[k]||0) + c.activated.addMana[k];
       log(`${pl.name} taps ${c.name} for mana.`);
       return true;
     }
-
     return false;
   }
 
@@ -614,7 +634,6 @@
     const isYourTurn = (state.active === playerIndex);
     const inMain = (state.phase === "MAIN1" || state.phase === "MAIN2");
     const stackEmpty = state.stack.length === 0;
-
     if (!isYourTurn || !inMain || !stackEmpty) return false;
     if (pl.landPlaysLeft <= 0) return false;
 
@@ -633,14 +652,14 @@
     const card = cardById(pl.hand, handCardId);
     if (!card || card.isLand) return false;
 
-    if (!speedAllows(card, state)) return false;
+    if (!speedAllows(card, playerIndex)) return false;
     if (!canPay(card.cost, pl.manaPool)) return false;
 
     const needsTarget = !!(card.spell && card.spell.target);
     if (needsTarget) {
       ui.pendingCast = { cardId: handCardId, controller: playerIndex };
       ui.selectingMode = "TARGET";
-      ui.message = "Choose a target. Tap a creature, or tap the status pill to target the opponent.";
+      ui.statusHint = "Targeting: tap a creature, or long-press status for help.";
       render();
       return true;
     }
@@ -654,14 +673,12 @@
 
   function chooseTarget(target) {
     if (!ui.pendingCast) return;
-
     const controller = ui.pendingCast.controller;
     const pl = P(controller);
     const card = cardById(pl.hand, ui.pendingCast.cardId);
     if (!card) {
-      ui.pendingCast = null; ui.selectingMode = null; ui.message = "";
-      render(); scheduleAIAuto();
-      return;
+      ui.pendingCast = null; ui.selectingMode = null; ui.statusHint = "";
+      render(); scheduleAIAuto(); return;
     }
 
     const moved = removeById(pl.hand, ui.pendingCast.cardId);
@@ -671,7 +688,7 @@
 
     ui.pendingCast = null;
     ui.selectingMode = null;
-    ui.message = "";
+    ui.statusHint = "";
     ui._pickedBlocker = null;
 
     render();
@@ -717,13 +734,11 @@
       }
     }
   }
-
   function applyDamagePlayer(amount, target) {
     if (!target || target.kind !== "player") return;
     P(target.playerIndex).life -= amount;
     log(`${P(target.playerIndex).name} takes ${amount} damage.`);
   }
-
   function applyPump(p, t, target) {
     if (!target || target.kind !== "creature") return;
     const c = cardById(P(target.playerIndex).battlefield, target.creatureId);
@@ -742,6 +757,11 @@
     return true;
   }
 
+  function attackersList() {
+    const ap = AP();
+    return [...ap.attackers].map(id => cardById(ap.battlefield, id)).filter(Boolean);
+  }
+
   function toggleAttacker(creatureId) {
     const ap = AP();
     const c = cardById(ap.battlefield, creatureId);
@@ -756,7 +776,7 @@
     const b = cardById(def.battlefield, blockerId);
     if (!b || !b.type.includes("Creature") || b.tapped) return;
 
-    // One blocker per attacker; one assignment per blocker (simplified)
+    // one blocker can only block one attacker (simplified)
     for (const [atk, blk] of def.blockers.entries()) {
       if (blk === blockerId) def.blockers.delete(atk);
     }
@@ -765,84 +785,21 @@
     render();
   }
 
-  function gotoMain2FromCombat(ap) {
+  function gotoMain2FromCombat() {
+    const ap = AP();
     state.phase = "MAIN2";
     state.phaseIdx = PHASES.indexOf("MAIN2");
     log(`${ap.name}: Second main phase.`);
+    state.combat = null;
     ui.selectingMode = null;
     ui._pickedBlocker = null;
-    ui.message = "";
+    ui.combatHint = "";
     scheduleAIAuto();
     render();
   }
 
-  function doCombatIfReady() {
-    const ap = AP();
-    const def = NAP();
-
-    // -------- FIX: AI combat freeze --------
-    // If attacker is AI and there are no legal attackers, immediately advance to MAIN2.
-    // Also: if AI "declares attackers" but chooses none, also advance.
-    if (ap.isAI) {
-      const legal = ap.battlefield.filter(c => c.type.includes("Creature") && canAttackWith(c));
-      if (legal.length === 0) {
-        log("No attackers.");
-        gotoMain2FromCombat(ap);
-        return;
-      }
-      if (ap.attackers.size === 0) {
-        aiDeclareAttackers();
-        if (ap.attackers.size === 0) {
-          log("No attackers.");
-          gotoMain2FromCombat(ap);
-          return;
-        }
-        render();
-        scheduleAIAuto();
-        return; // next PASS tick will continue combat
-      }
-    }
-
-    const attackers = [...ap.attackers].map(id => cardById(ap.battlefield, id)).filter(Boolean);
-
-    // If human attacker declared none, advance
-    if (!ap.isAI && attackers.length === 0) {
-      log("No attackers.");
-      gotoMain2FromCombat(ap);
-      return;
-    }
-
-    // Defending decisions
-    if (def.isAI) {
-      aiDeclareBlockers(attackers);
-    } else {
-      // Human defending: enter blockers mode and WAIT until Pass/No Blocks
-      if (ui.selectingMode !== "BLOCKERS") {
-        ui.selectingMode = "BLOCKERS";
-        ui._pickedBlocker = null;
-        ui.message = "Defend: tap a blocker, then tap an attacker to assign. Press Pass/No Blocks when done.";
-        render();
-      }
-      return;
-    }
-
-    // Damage (single step)
-    combatDamage(attackers);
-    stateBasedActions();
-
-    // Reset combat selections
-    ap.attackers = new Set();
-    def.blockers = new Map();
-    ui.selectingMode = null;
-    ui._pickedBlocker = null;
-    ui.message = "";
-
-    gotoMain2FromCombat(ap);
-  }
-
   function combatDamage(attackers) {
     const def = NAP();
-
     // tap attackers
     for (const a of attackers) a.tapped = true;
 
@@ -855,7 +812,7 @@
           const bpow = totalPower(b);
           a.damageMarked += bpow;
           b.damageMarked += apow;
-          log(`${a.name} (${apow}/${totalToughness(a)}) and ${b.name} (${bpow}/${totalToughness(b)}) deal damage to each other.`);
+          log(`${a.name} and ${b.name} deal damage to each other.`);
         }
       } else {
         const dmg = totalPower(a);
@@ -865,21 +822,119 @@
     }
   }
 
+  // NEW: Full combat flow with "blockers assigned" windows
+  function doCombatFlow() {
+    const ap = AP();
+    const def = NAP();
+    if (!state.combat) resetCombat();
+
+    // 1) Declare attackers
+    if (state.combat.step === "DECLARE_ATTACKERS") {
+      if (ap.isAI) {
+        const legal = ap.battlefield.filter(c => c.type.includes("Creature") && canAttackWith(c));
+        if (legal.length === 0) { log("No attackers."); gotoMain2FromCombat(); return; }
+        if (ap.attackers.size === 0) aiDeclareAttackers();
+        if (ap.attackers.size === 0) { log("No attackers."); gotoMain2FromCombat(); return; }
+        state.combat.step = "DECLARE_BLOCKERS";
+        ui.combatHint = "Blockers: defender assigns blocks.";
+        render();
+        scheduleAIAuto();
+        return;
+      } else {
+        // human attacker: if they haven’t started selecting, they must choose or pass with none.
+        if (ui.selectingMode !== "ATTACKERS") {
+          ui.combatHint = "Declare attackers: press Attack, tap attackers, then Pass.";
+          render();
+          return;
+        }
+        return;
+      }
+    }
+
+    // 2) Declare blockers
+    if (state.combat.step === "DECLARE_BLOCKERS") {
+      const atks = attackersList();
+      if (atks.length === 0) { log("No attackers."); gotoMain2FromCombat(); return; }
+
+      if (def.isAI) {
+        aiDeclareBlockers(atks);
+        state.combat.step = "POSTBLOCK_ATTACKER";
+        state.combat.passed.attacker = false;
+        state.combat.passed.defender = false;
+        ui.combatHint = "Blockers assigned: attacker may cast instants. Pass to give defender a chance.";
+        render();
+        scheduleAIAuto();
+        return;
+      } else {
+        if (ui.selectingMode !== "BLOCKERS") {
+          ui.selectingMode = "BLOCKERS";
+          ui._pickedBlocker = null;
+          ui.combatHint = "Defend: tap a blocker, then tap an attacker. Pass/No Blocks when done.";
+          render();
+        }
+        return;
+      }
+    }
+
+    // 3) After blockers — attacker priority
+    if (state.combat.step === "POSTBLOCK_ATTACKER") {
+      ui.combatHint = ap.isAI
+        ? "AI thinking (after blocks)…"
+        : "After blocks: cast instants (e.g. Giant Growth). Pass when done.";
+      // if attacker passed, move to defender window
+      if (state.combat.passed.attacker) {
+        state.combat.step = "POSTBLOCK_DEFENDER";
+        ui.combatHint = def.isAI
+          ? "AI may respond…"
+          : "Defender may respond with instants. Pass to deal combat damage.";
+        render();
+        scheduleAIAuto();
+      }
+      return;
+    }
+
+    // 4) After blockers — defender priority
+    if (state.combat.step === "POSTBLOCK_DEFENDER") {
+      ui.combatHint = def.isAI
+        ? "AI thinking (defender response)…"
+        : "Defender response: cast instants if you want. Pass to deal combat damage.";
+
+      if (state.combat.passed.defender) {
+        state.combat.step = "DAMAGE";
+      } else {
+        return;
+      }
+    }
+
+    // 5) Combat damage
+    if (state.combat.step === "DAMAGE") {
+      const atks = attackersList();
+      if (atks.length === 0) { log("No attackers."); gotoMain2FromCombat(); return; }
+      combatDamage(atks);
+      stateBasedActions();
+      ap.attackers = new Set();
+      def.blockers = new Map();
+      gotoMain2FromCombat();
+      return;
+    }
+  }
+
   // ---------- AI ----------
   function maybeRunAI() {
     if (isGameOver()) return;
-    if (!AP().isAI) return;
+    const ap = AP();
+    if (!ap.isAI) return;
 
     if (state.phase === "MAIN1" || state.phase === "MAIN2") aiMainPhase();
-    if (state.phase === "COMBAT") aiDeclareAttackers();
+    if (state.phase === "COMBAT") aiCombatPhase();
   }
 
-  function aiTapAllLands() {
-    const ai = P(1);
+  function aiTapAllLands(playerIndex) {
+    const ai = P(playerIndex);
     for (const c of ai.battlefield) {
       if (!c.tapped) {
-        if (c.isLand && c.produces) tapForMana(1, c.id);
-        else if (c.activated && c.activated.addMana) tapForMana(1, c.id);
+        if (c.isLand && c.produces) tapForMana(playerIndex, c.id);
+        else if (c.activated && c.activated.addMana) tapForMana(playerIndex, c.id);
       }
     }
   }
@@ -888,15 +943,14 @@
     const ai = P(1);
     const human = P(0);
 
-    // play land
     if (ai.landPlaysLeft > 0 && state.stack.length === 0) {
       const land = ai.hand.find(c => c.isLand);
       if (land) playLand(1, land.id);
     }
 
-    aiTapAllLands();
+    aiTapAllLands(1);
 
-    // Try Lava Axe at player
+    // Lava Axe at player
     const axe = ai.hand.find(c => c.key === "LavaAxe");
     if (axe && canPay(axe.cost, ai.manaPool) && state.stack.length === 0) {
       const moved = removeById(ai.hand, axe.id);
@@ -906,13 +960,12 @@
       return;
     }
 
-    // Cast biggest creature
+    // Biggest creature
     const creature = ai.hand
       .filter(c => c.type.includes("Creature"))
       .sort((a,b) => {
-        const ca = parseCost(a.cost), cb = parseCost(b.cost);
-        const va = ca.C + ca.R + ca.G, vb = cb.C + cb.R + cb.G;
-        return vb - va;
+        const A = parseCost(a.cost), B = parseCost(b.cost);
+        return (B.C+B.R+B.G) - (A.C+A.R+A.G);
       })[0];
 
     if (creature && canPay(creature.cost, ai.manaPool) && state.stack.length === 0) {
@@ -923,7 +976,7 @@
       return;
     }
 
-    // Burn: kill if possible else face
+    // Burn
     const burn = ai.hand.find(c => c.key === "LightningBolt" || c.key === "Shock");
     if (burn && canPay(burn.cost, ai.manaPool) && state.stack.length === 0) {
       const amount = burn.key === "LightningBolt" ? 3 : 2;
@@ -941,6 +994,69 @@
     }
   }
 
+  function aiCombatPhase() {
+    // AI decisions depend on combat sub-step
+    if (!state.combat) return;
+
+    if (state.combat.step === "DECLARE_ATTACKERS") {
+      // attackers chosen by doCombatFlow / aiDeclareAttackers; no-op here
+      return;
+    }
+
+    if (state.combat.step === "POSTBLOCK_ATTACKER" && state.active === 1) {
+      // AI is attacker: try to Giant Growth an unblocked attacker
+      aiTapAllLands(1);
+      const ai = P(1);
+      const gg = ai.hand.find(c => c.key === "GiantGrowth");
+      if (gg && canPay(gg.cost, ai.manaPool) && state.stack.length === 0) {
+        const atks = attackersList();
+        const def = P(0);
+        const unblocked = atks.find(a => !def.blockers.has(a.id));
+        if (unblocked) {
+          const moved = removeById(ai.hand, gg.id);
+          pay(moved.cost, ai.manaPool);
+          state.stack.unshift({
+            card: moved, controller: 1,
+            target: { kind:"creature", playerIndex: 1, creatureId: unblocked.id }
+          });
+          log(`AI casts ${moved.name}.`);
+          return;
+        }
+      }
+      // done acting; will pass on PASS tick
+      return;
+    }
+
+    if (state.combat.step === "POSTBLOCK_DEFENDER" && state.active === 0) {
+      // AI is defender during your attack: optional small defence pump (simple)
+      aiTapAllLands(1);
+      const ai = P(1);
+      const gg = ai.hand.find(c => c.key === "GiantGrowth");
+      if (gg && canPay(gg.cost, ai.manaPool) && state.stack.length === 0) {
+        // pump a blocker that is currently blocking and would otherwise die
+        const def = ai;
+        const blocks = [...def.blockers.entries()];
+        for (const [atkId, blkId] of blocks) {
+          const blocker = cardById(def.battlefield, blkId);
+          const atk = cardById(P(0).battlefield, atkId);
+          if (!blocker || !atk) continue;
+          const wouldDie = (blocker.damageMarked + totalPower(atk)) >= totalToughness(blocker);
+          if (wouldDie) {
+            const moved = removeById(ai.hand, gg.id);
+            pay(moved.cost, ai.manaPool);
+            state.stack.unshift({
+              card: moved, controller: 1,
+              target: { kind:"creature", playerIndex: 1, creatureId: blocker.id }
+            });
+            log(`AI casts ${moved.name}.`);
+            return;
+          }
+        }
+      }
+      return;
+    }
+  }
+
   function aiDeclareAttackers() {
     const ai = P(1);
     const human = P(0);
@@ -953,11 +1069,10 @@
     const aiPower = aiCreatures.reduce((s,c)=>s+totalPower(c),0);
     if (human.life <= aiPower) {
       aiCreatures.forEach(c => ai.attackers.add(c.id));
-      log("AI attacks with everything (lethal attempt).");
+      log("AI attacks with everything.");
       return;
     }
 
-    // simple heuristic: attack with creatures likely to survive biggest block
     const humanCreatures = human.battlefield.filter(c => c.type.includes("Creature"));
     const biggestBlock = humanCreatures.sort((a,b)=>totalPower(b)-totalPower(a))[0];
 
@@ -970,7 +1085,7 @@
   }
 
   function aiDeclareBlockers(attackers) {
-    const ai = NAP();
+    const ai = NAP(); // defender (AI if you're attacking; human if AI attacking)
     if (!ai.isAI) return;
 
     ai.blockers = new Map();
@@ -982,57 +1097,95 @@
       if (!b) break;
       ai.blockers.set(a.id, b.id);
     }
-    if (ai.blockers.size > 0) log("AI blocks.");
+    if (ai.blockers.size > 0) log("AI assigns blockers.");
+    else log("AI declares no blocks.");
   }
 
   // ---------- Rendering ----------
+  function shortPhaseLabel() {
+    if (state.phase !== "COMBAT" || !state.combat) return state.phase;
+    const s = state.combat.step;
+    if (s === "DECLARE_ATTACKERS") return "COMBAT: attackers";
+    if (s === "DECLARE_BLOCKERS") return "COMBAT: blockers";
+    if (s === "POSTBLOCK_ATTACKER") return "COMBAT: after blocks (atk)";
+    if (s === "POSTBLOCK_DEFENDER") return "COMBAT: after blocks (def)";
+    if (s === "DAMAGE") return "COMBAT: damage";
+    return "COMBAT";
+  }
+
   function render() {
     if (!state) return;
 
-    // Status
     const ap = AP();
-    statusPill.textContent = isGameOver()
-      ? winnerText()
-      : `${ap.name} to act · Turn ${state.turn} · Phase: ${state.phase}${ui.message ? " · " + ui.message : ""}`;
+    const phaseLabel = shortPhaseLabel();
 
-    // Stack
+    // Keep header compact; details available via long-press tooltip.
+    const compact = isGameOver()
+      ? winnerText()
+      : `${ap.name} · T${state.turn} · ${phaseLabel}`;
+
+    statusPill.textContent = compact;
+
+    // Long-press detail string
+    const fullStatus = isGameOver()
+      ? winnerText()
+      : [
+          `${ap.name} to act`,
+          `Turn ${state.turn}`,
+          `Phase: ${phaseLabel}`,
+          ui.combatHint ? `Combat: ${ui.combatHint}` : "",
+          ui.selectingMode === "TARGET" ? "Targeting: tap a creature, or tap the status pill to target the opponent." : "",
+          `You: Life ${P(0).life} · Mana R${P(0).manaPool.R||0} G${P(0).manaPool.G||0}`,
+          `AI: Life ${P(1).life} · Mana R${P(1).manaPool.R||0} G${P(1).manaPool.G||0}`
+        ].filter(Boolean).join("\n");
+
+    statusPill.setAttribute("data-tooltip-title", "Status");
+    statusPill.setAttribute("data-tooltip-body", fullStatus);
+
+    // Stack as horizontal drawer
     if (state.stack.length === 0) {
       stackViewEl.innerHTML = `<div class="muted">Stack: (empty)</div>`;
     } else {
       const html = state.stack.map((it, idx) => {
         const t = it.target
           ? (it.target.kind === "player"
-            ? `→ ${P(it.target.playerIndex).name}`
-            : `→ ${cardById(P(it.target.playerIndex).battlefield, it.target.creatureId)?.name || "creature"}`
-          )
+              ? `→ ${P(it.target.playerIndex).name}`
+              : `→ ${cardById(P(it.target.playerIndex).battlefield, it.target.creatureId)?.name || "creature"}`
+            )
           : "";
-        return `<div class="stackItem"><span class="badge">#${idx+1}</span> <strong>${escapeHtml(it.card.name)}</strong> <span class="muted">(${escapeHtml(P(it.controller).name)})</span> <span class="muted">${escapeHtml(t)}</span></div>`;
+        const body = `#${idx+1}  ${it.card.name}\n${P(it.controller).name} ${t}`;
+        return `<div class="stackItem" data-tooltip-title="Stack Item" data-tooltip-body="${escapeAttr(body)}">
+          <div><span class="badge">#${idx+1}</span> <strong>${escapeHtml(it.card.name)}</strong></div>
+          <div class="muted" style="margin-top:4px">${escapeHtml(P(it.controller).name)} ${escapeHtml(t)}</div>
+        </div>`;
       }).join("");
-      stackViewEl.innerHTML = `<div class="muted" style="margin-bottom:8px">Stack (top first):</div>${html}`;
+      stackViewEl.innerHTML = `<div class="hscroll">${html}</div>`;
     }
 
-    // Battlefields + hand (horizontal drawers)
+    // Zones
     aiBattlefieldEl.innerHTML = renderZone(1, "battlefield");
     youBattlefieldEl.innerHTML = renderZone(0, "battlefield");
     youHandEl.innerHTML = renderZone(0, "hand");
 
-    // Log (reverse order: newest at top)
-    const reversed = [...state.log].reverse();
-    logEl.innerHTML = reversed.map(line => `<div>${escapeHtml(line)}</div>`).join("");
+    // Log reversed (newest at top)
+    logEl.innerHTML = [...state.log].reverse().map(line => `<div>${escapeHtml(line)}</div>`).join("");
 
-    // Buttons
+    // Buttons enabled state
     document.getElementById("btnPass").disabled = isGameOver();
     document.getElementById("btnAttack").disabled = isGameOver() || state.phase !== "COMBAT" || state.active !== 0;
-    document.getElementById("btnNoBlocks").disabled = isGameOver() || !(state.phase === "COMBAT" && state.active === 1 && ui.selectingMode === "BLOCKERS");
+    document.getElementById("btnNoBlocks").disabled =
+      isGameOver() || !(state.phase === "COMBAT" && state.combat && state.combat.step === "DECLARE_BLOCKERS" && state.active === 1 && ui.selectingMode === "BLOCKERS");
   }
 
   function renderZone(playerIndex, zoneName) {
     const pl = P(playerIndex);
 
     const header = `
-      <div class="zoneHeader">
-        <strong>${escapeHtml(pl.name)}</strong>
-        <span class="muted">Life: ${pl.life} · Hand: ${pl.hand.length} · Library: ${pl.library.length} · Mana: R${pl.manaPool.R||0} G${pl.manaPool.G||0} · Lands left: ${pl.landPlaysLeft}</span>
+      <div class="muted" style="margin-bottom:8px">
+        ${escapeHtml(pl.name)} · Life ${pl.life}
+        · Mana R${pl.manaPool.R||0} G${pl.manaPool.G||0}
+        · Hand ${pl.hand.length}
+        · Lands left ${pl.landPlaysLeft}
       </div>
     `;
 
@@ -1042,42 +1195,60 @@
 
     const body = items.length
       ? `<div class="hscroll">${items.map(c => cardHtml(playerIndex, c, zoneName)).join("")}</div>`
-      : `<div class="muted">${zoneName === "hand" ? (playerIndex === 0 ? "(Hand empty)" : "(AI hand hidden)") : "(Battlefield empty)"}</div>`;
+      : `<div class="muted">${zoneName === "hand" ? "(Hand empty)" : "(Battlefield empty)"}</div>`;
 
     const gyNames = pl.graveyard.slice(-6).map(c => c.name).join(", ");
-    const gy = `<div class="muted" style="margin-top:8px">${pl.graveyard.length ? `Graveyard (${pl.graveyard.length}): ${escapeHtml(gyNames)}${pl.graveyard.length>6?" …":""}` : "Graveyard: (empty)"}</div>`;
+    const gy = zoneName === "battlefield"
+      ? `<div class="muted" style="margin-top:8px">${pl.graveyard.length ? `Graveyard (${pl.graveyard.length}): ${escapeHtml(gyNames)}${pl.graveyard.length>6?" …":""}` : "Graveyard: (empty)"}</div>`
+      : "";
 
-    return header + body + (zoneName === "battlefield" ? gy : "");
+    return header + body + gy;
   }
 
   function cardHtml(controllerIndex, card, zone) {
     const isCreature = card.type.includes("Creature");
     const stats = isCreature ? `${totalPower(card)}/${totalToughness(card)}${card.damageMarked ? " (dmg " + card.damageMarked + ")" : ""}` : "";
-
     const tags = [];
     if (card.isLand) tags.push("Land");
-    if (isCreature && card.summoningSick) tags.push("Summoning sick");
+    if (isCreature && card.summoningSick) tags.push("Sick");
     if (controllerIndex === state.active && isCreature && P(controllerIndex).attackers?.has(card.id)) tags.push("Attacking");
-    const tagHtml = tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join(" ");
+    if (card.tapped) tags.push("Tapped");
+
+    const tagHtml = tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("");
 
     const cls = `card ${zone !== "hand" ? "small" : ""} ${card.tapped ? "tap" : ""}`;
 
+    const tooltipBody = [
+      `${card.name}`,
+      `${card.type}`,
+      card.cost ? `Cost: ${card.cost}` : "",
+      isCreature ? `Stats: ${stats}` : "",
+      card.text ? `\n${card.text}` : ""
+    ].filter(Boolean).join("\n");
+
     return `
-      <div class="${cls}" data-zone="${zone}" data-controller="${controllerIndex}" data-id="${card.id}">
-        <div class="name">${escapeHtml(card.name)}</div>
-        <div class="type">${escapeHtml(card.type)}</div>
-        <div class="text">${escapeHtml(card.text || "")}</div>
-        <div class="stats">
-          <span>${card.cost ? "Cost: " + escapeHtml(card.cost) : ""}</span>
-          <span>${escapeHtml(stats)}</span>
+      <div class="${cls}"
+        data-zone="${zone}"
+        data-controller="${controllerIndex}"
+        data-id="${card.id}"
+        data-tooltip-title="${escapeAttr(card.name)}"
+        data-tooltip-body="${escapeAttr(tooltipBody)}">
+        <div class="metaRow">
+          <div class="name">${escapeHtml(card.name)}</div>
+          <div class="cost">${card.cost ? escapeHtml(card.cost) : ""}</div>
         </div>
-        <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">${tagHtml}</div>
+        <div class="metaRow" style="margin-top:2px">
+          <div class="stats">${escapeHtml(stats)}</div>
+          <div class="muted">${card.isLand ? "Land" : card.type.includes("Instant") ? "Instant" : card.type.includes("Sorcery") ? "Sorcery" : card.type.includes("Creature") ? "Creature" : ""}</div>
+        </div>
+        <div class="tags">${tagHtml}</div>
       </div>
     `;
   }
 
-  function bindCardClicks() {
-    // Event delegation for all cards
+  // ---------- Interaction (tap + long-press tooltips) ----------
+  function bindCardAndTooltipInteractions() {
+    // Tap: card action
     document.body.addEventListener("click", (e) => {
       const cardEl = e.target.closest(".card");
       if (!cardEl) return;
@@ -1086,6 +1257,53 @@
       const cardId = cardEl.getAttribute("data-id");
       onCardTap(controllerIndex, cardId, zone);
     });
+
+    // Long-press: tooltip (cards + status pill + stack items)
+    let pressTimer = null;
+    let pressedEl = null;
+
+    const start = (el) => {
+      cancel();
+      pressedEl = el;
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        if (!pressedEl) return;
+        const title = pressedEl.getAttribute("data-tooltip-title") || "Details";
+        const body = pressedEl.getAttribute("data-tooltip-body") || "";
+        if (!body) return;
+        showTooltip(title, body);
+      }, 450);
+    };
+
+    const cancel = () => {
+      if (pressTimer) clearTimeout(pressTimer);
+      pressTimer = null;
+      pressedEl = null;
+    };
+
+    document.body.addEventListener("pointerdown", (e) => {
+      const tEl = e.target.closest("[data-tooltip-body]");
+      if (!tEl) return;
+      start(tEl);
+    }, { passive: true });
+
+    document.body.addEventListener("pointerup", cancel, { passive: true });
+    document.body.addEventListener("pointercancel", cancel, { passive: true });
+    document.body.addEventListener("pointermove", cancel, { passive: true });
+
+    tooltipClose.addEventListener("click", hideTooltip);
+    tooltipOverlay.addEventListener("click", (e) => { if (e.target === tooltipOverlay) hideTooltip(); });
+  }
+
+  function showTooltip(title, body) {
+    tooltipTitle.textContent = title;
+    tooltipBody.textContent = body;
+    tooltipOverlay.style.display = "flex";
+    tooltipOverlay.setAttribute("aria-hidden", "false");
+  }
+  function hideTooltip() {
+    tooltipOverlay.style.display = "none";
+    tooltipOverlay.setAttribute("aria-hidden", "true");
   }
 
   function onCardTap(controllerIndex, cardId, zone) {
@@ -1101,51 +1319,47 @@
         chooseTarget({ kind:"player", playerIndex: controllerIndex });
         return;
       }
-      if (spell.target === "any") {
+      if (spell.target === "any" || spell.target === "creature") {
         if (zone === "battlefield") {
           const c = cardById(P(controllerIndex).battlefield, cardId);
-          if (c && c.type.includes("Creature")) chooseTarget({ kind:"creature", playerIndex: controllerIndex, creatureId: cardId });
-        }
-        return;
-      }
-      if (spell.target === "creature") {
-        if (zone === "battlefield") {
-          const c = cardById(P(controllerIndex).battlefield, cardId);
-          if (c && c.type.includes("Creature")) chooseTarget({ kind:"creature", playerIndex: controllerIndex, creatureId: cardId });
+          if (c && c.type.includes("Creature")) {
+            chooseTarget({ kind:"creature", playerIndex: controllerIndex, creatureId: cardId });
+          }
         }
         return;
       }
     }
 
     // Human attacker selection
-    if (state.phase === "COMBAT" && state.active === 0 && controllerIndex === 0 && zone === "battlefield" && ui.selectingMode === "ATTACKERS") {
+    if (state.phase === "COMBAT" && state.active === 0 && zone === "battlefield" && controllerIndex === 0 && ui.selectingMode === "ATTACKERS") {
       toggleAttacker(cardId);
       return;
     }
 
-    // Human blocker picking (first tap chooses blocker)
-    if (state.phase === "COMBAT" && state.active === 1 && controllerIndex === 0 && zone === "battlefield" && ui.selectingMode === "BLOCKERS") {
-      if (!ui._pickedBlocker) {
-        const b = cardById(P(0).battlefield, cardId);
-        if (!b || !b.type.includes("Creature") || b.tapped) return;
-        ui._pickedBlocker = cardId;
-        ui.message = "Now tap an attacker to assign this blocker. (Or press Pass/No Blocks.)";
+    // Human blocker selection (defending against AI attack)
+    if (state.phase === "COMBAT" && state.active === 1 && state.combat && state.combat.step === "DECLARE_BLOCKERS"
+        && zone === "battlefield" && ui.selectingMode === "BLOCKERS") {
+      if (controllerIndex === 0) {
+        if (!ui._pickedBlocker) {
+          const b = cardById(P(0).battlefield, cardId);
+          if (!b || !b.type.includes("Creature") || b.tapped) return;
+          ui._pickedBlocker = cardId;
+          ui.combatHint = "Tap an attacker to assign this blocker, or Pass/No Blocks when done.";
+          render();
+          return;
+        }
+        return;
+      } else if (controllerIndex === 1 && ui._pickedBlocker) {
+        // tapping attacker assigns
+        toggleBlocker(ui._pickedBlocker, cardId);
+        ui._pickedBlocker = null;
+        ui.combatHint = "Assign more blocks, or Pass/No Blocks when done.";
         render();
         return;
       }
-      return;
     }
 
-    // After choosing a blocker, tapping an attacker assigns it
-    if (state.phase === "COMBAT" && state.active === 1 && controllerIndex === 1 && zone === "battlefield" && ui.selectingMode === "BLOCKERS" && ui._pickedBlocker) {
-      toggleBlocker(ui._pickedBlocker, cardId);
-      ui._pickedBlocker = null;
-      ui.message = "Assign more blocks, or press Pass/No Blocks when done.";
-      render();
-      return;
-    }
-
-    // Only human can directly interact with their permanents/hand
+    // Only human can directly interact with their own cards for mana + casting
     if (controllerIndex !== 0) return;
 
     const you = P(0);
@@ -1161,12 +1375,12 @@
       if (!card) return;
 
       if (card.isLand) {
-        if (!playLand(0, cardId)) log("You can only play a land on your turn, in a main phase, with an empty stack, and only once per turn.");
+        if (!playLand(0, cardId)) log("You can only play a land on your turn, in a main phase, with an empty stack, once per turn.");
         render();
         return;
       }
 
-      if (!speedAllows(card, state)) { log("You can’t cast that right now (timing restriction)."); render(); return; }
+      if (!speedAllows(card, 0)) { log("You can’t cast that right now (timing restriction)."); render(); return; }
       if (!canPay(card.cost, you.manaPool)) { log("Not enough mana. Tap lands first."); render(); return; }
 
       beginCast(0, cardId);
@@ -1175,7 +1389,7 @@
     }
   }
 
-  // Tap status pill to target opponent during targeting
+  // Tap status pill to target opponent during targeting (kept, but details are long-press)
   statusPill.addEventListener("click", () => {
     if (!state || !ui.pendingCast) return;
     const pendingCard = cardById(P(ui.pendingCast.controller).hand, ui.pendingCast.cardId);
@@ -1187,91 +1401,156 @@
     }
   });
 
-  // ---------- Buttons ----------
-  document.getElementById("btnNew").addEventListener("click", startGame);
+  // ---------- Buttons / Menu ----------
+  const btnPass = document.getElementById("btnPass");
+  const btnAttack = document.getElementById("btnAttack");
+  const btnNoBlocks = document.getElementById("btnNoBlocks");
+  const menu = document.getElementById("menu");
 
-  document.getElementById("btnTapAll").addEventListener("click", () => {
+  btnAttack.addEventListener("click", () => {
     if (!state || isGameOver()) return;
-    const you = P(0);
-    for (const c of you.battlefield) {
-      if (!c.tapped) tapForMana(0, c.id);
+    if (!(state.phase === "COMBAT" && state.active === 0 && state.combat)) return;
+
+    // Only valid during declare attackers step
+    if (state.combat.step !== "DECLARE_ATTACKERS") {
+      log("You can only choose attackers during the attackers step.");
+      return;
     }
-    render();
-  });
 
-  document.getElementById("btnAttack").addEventListener("click", () => {
-    if (!state || isGameOver()) return;
-    if (!(state.phase === "COMBAT" && state.active === 0)) return;
     ui.selectingMode = (ui.selectingMode === "ATTACKERS") ? null : "ATTACKERS";
-    ui.message = ui.selectingMode ? "Tap your creatures to choose attackers, then press Pass / Next." : "";
+    ui.combatHint = ui.selectingMode
+      ? "Tap your creatures to choose attackers, then Pass."
+      : "Declare attackers: press Attack, tap attackers, then Pass.";
     render();
   });
 
-  document.getElementById("btnNoBlocks").addEventListener("click", () => {
+  btnNoBlocks.addEventListener("click", () => {
     if (!state || isGameOver()) return;
-    if (!(state.phase === "COMBAT" && state.active === 1 && ui.selectingMode === "BLOCKERS")) return;
+    if (!(state.phase === "COMBAT" && state.active === 1 && state.combat && state.combat.step === "DECLARE_BLOCKERS" && ui.selectingMode === "BLOCKERS")) return;
+
     ui.selectingMode = null;
     ui._pickedBlocker = null;
-    ui.message = "";
+    ui.combatHint = "Blockers assigned: attacker may cast instants. Pass to give defender a chance.";
     log("No blocks declared.");
-    doCombatIfReady();
+    state.combat.step = "POSTBLOCK_ATTACKER";
+    state.combat.passed.attacker = false;
+    state.combat.passed.defender = false;
+    render();
     scheduleAIAuto();
   });
 
-  document.getElementById("btnPass").addEventListener("click", () => {
+  btnPass.addEventListener("click", () => {
     if (!state || isGameOver()) return;
 
-    // If you're choosing attackers, Pass locks them in.
-    if (state.phase === "COMBAT" && state.active === 0 && ui.selectingMode === "ATTACKERS") {
-      ui.selectingMode = null;
-      ui.message = "";
-      log("Attackers locked in.");
-      doCombatIfReady();
-      scheduleAIAuto();
-      return;
-    }
-
-    // If you're defending in AI combat, Pass locks blocks and proceeds.
-    if (state.phase === "COMBAT" && state.active === 1 && ui.selectingMode === "BLOCKERS") {
-      ui.selectingMode = null;
-      ui._pickedBlocker = null;
-      ui.message = "";
-      log("Blocks locked in.");
-      doCombatIfReady();
-      scheduleAIAuto();
-      return;
-    }
-
-    // If targeting is pending, require a target first
+    // Targeting gate
     if (ui.selectingMode === "TARGET") {
-      log("Choose a target first. Tap a creature, or tap the status pill to target the opponent.");
+      log("Choose a target first (tap a creature, or tap the status pill to target the opponent).");
       return;
     }
 
+    // Combat-specific pass behaviour
+    if (state.phase === "COMBAT" && state.combat) {
+      const atkIndex = state.active;
+      const defIndex = 1 - state.active;
+
+      // Lock attackers (human attacker)
+      if (state.combat.step === "DECLARE_ATTACKERS" && atkIndex === 0) {
+        ui.selectingMode = null;
+        const atks = attackersList();
+        if (atks.length === 0) {
+          log("No attackers.");
+          gotoMain2FromCombat();
+          return;
+        }
+        log("Attackers locked in.");
+        state.combat.step = "DECLARE_BLOCKERS";
+        ui.combatHint = "Blockers: defender assigns blocks.";
+        render();
+        scheduleAIAuto();
+        return;
+      }
+
+      // Lock blocks (human defender vs AI attack)
+      if (state.combat.step === "DECLARE_BLOCKERS" && defIndex === 0 && ui.selectingMode === "BLOCKERS") {
+        ui.selectingMode = null;
+        ui._pickedBlocker = null;
+        log("Blocks locked in.");
+        state.combat.step = "POSTBLOCK_ATTACKER";
+        state.combat.passed.attacker = false;
+        state.combat.passed.defender = false;
+        ui.combatHint = "Blockers assigned: attacker may cast instants. Pass to give defender a chance.";
+        render();
+        scheduleAIAuto();
+        return;
+      }
+
+      // Post-block windows: mark passes (only if stack empty; otherwise resolves stack first via advancePhase)
+      if (state.stack.length === 0) {
+        if (state.combat.step === "POSTBLOCK_ATTACKER") {
+          state.combat.passed.attacker = true;
+          log("Attacker passes after blocks.");
+          doCombatFlow();
+          return;
+        }
+        if (state.combat.step === "POSTBLOCK_DEFENDER") {
+          state.combat.passed.defender = true;
+          log("Defender passes after blocks.");
+          doCombatFlow();
+          return;
+        }
+      }
+    }
+
+    // Default: resolve stack / advance phases / progress combat flow
     advancePhase();
     render();
     scheduleAIAuto();
   });
 
-  document.getElementById("btnConcede").addEventListener("click", () => {
+  menu.addEventListener("change", () => {
+    const v = menu.value;
+    menu.value = "";
+
     if (!state) return;
-    P(0).life = 0;
-    log("You concede.");
-    render();
+
+    if (v === "new") {
+      startGame();
+      return;
+    }
+    if (v === "tapall") {
+      if (isGameOver()) return;
+      const you = P(0);
+      for (const c of you.battlefield) if (!c.tapped) tapForMana(0, c.id);
+      render();
+      return;
+    }
+    if (v === "concede") {
+      if (!state) return;
+      P(0).life = 0;
+      log("You concede.");
+      render();
+      return;
+    }
   });
 
-  // ---------- HTML escape ----------
+  // ---------- HTML escaping ----------
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
     }[c]));
   }
+  function escapeAttr(s) {
+    // for data-* attributes; keep it simple + safe
+    return escapeHtml(String(s)).replace(/\n/g, "&#10;");
+  }
+
+  // ---------- Bind tooltip + card interactions ----------
+  bindCardAndTooltipInteractions();
 
   // ---------- Boot ----------
-  bindCardClicks();
   startGame();
 
-  // Optional: register service worker if hosted over https (sw.js unchanged)
+  // Optional: register service worker if hosted over https
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(()=>{});
   }
