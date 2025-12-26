@@ -1,0 +1,1250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MicroMTG (Mobile)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 0; background: #0f1216; color: #e7edf5; }
+    header { padding: 10px 12px; background: #151b22; position: sticky; top: 0; z-index: 3; border-bottom: 1px solid #222a35; }
+    header .row { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .pill { padding: 6px 10px; border: 1px solid #2a3442; border-radius: 999px; background: #0f141b; font-size: 13px; }
+    .wrap { padding: 10px 12px 90px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    @media (min-width: 820px) { .grid { grid-template-columns: 1.2fr 0.8fr; } }
+    .panel { border: 1px solid #222a35; border-radius: 12px; background: #121822; overflow: hidden; }
+    .panel h2 { margin: 0; padding: 10px 12px; background: #151b22; border-bottom: 1px solid #222a35; font-size: 14px; letter-spacing: 0.3px; text-transform: uppercase; color: #b9c7db; }
+    .panel .content { padding: 10px 12px; }
+
+    .zones { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .zoneRow { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    @media (min-width: 520px) { .zoneRow { grid-template-columns: 1fr 1fr; } }
+
+    .zone { border: 1px solid #222a35; border-radius: 12px; padding: 8px; background: #0f141b; }
+    .zoneTitle { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+    .zoneTitle strong { font-size: 13px; }
+    .muted { color: #9db0c9; font-size: 12px; }
+    .cards { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .card {
+      width: 150px;
+      max-width: calc(50vw - 24px);
+      border: 1px solid #2a3442;
+      background: #121822;
+      border-radius: 12px;
+      padding: 8px;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    .card.small { width: 120px; }
+    .card .name { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+    .card .type { font-size: 12px; color: #a9bdd6; margin-bottom: 6px; }
+    .card .text { font-size: 12px; color: #d3def0; line-height: 1.25; white-space: pre-wrap; margin-bottom: 6px; }
+    .card .stats { font-size: 12px; color: #b9c7db; display: flex; justify-content: space-between; }
+    .tag { font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid #2a3442; color: #b9c7db; }
+    .tap { opacity: 0.8; transform: rotate(10deg); }
+    .selected { outline: 2px solid #78a6ff; }
+    .danger { outline: 2px solid #ff6a6a; }
+    .good { outline: 2px solid #6affb2; }
+
+    .bottomBar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #0c1016;
+      border-top: 1px solid #222a35;
+      padding: 10px 10px;
+      z-index: 5;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    button {
+      border: 1px solid #2a3442; background: #121822; color: #e7edf5;
+      padding: 10px 12px; border-radius: 12px;
+      font-weight: 650; font-size: 14px;
+      touch-action: manipulation;
+    }
+    button:disabled { opacity: 0.45; }
+    button.primary { border-color: #3b6cff; background: #15223b; }
+    button.warn { border-color: #ff6a6a; background: #341717; }
+    button.ok { border-color: #43d28a; background: #14301f; }
+
+    .log {
+      max-height: 240px; overflow: auto; font-size: 12px; line-height: 1.35;
+      background: #0f141b; border: 1px solid #222a35; border-radius: 12px; padding: 8px;
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .hint { color: #9db0c9; font-size: 12px; margin-top: 8px; }
+    .stackItem { margin-bottom: 6px; padding: 6px; border: 1px dashed #2a3442; border-radius: 10px; }
+    .badge { font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid #2a3442; color: #b9c7db; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <div class="pill">
+      <strong>MicroMTG</strong> · core MTG feel, tiny card pool
+    </div>
+    <div class="pill" id="statusPill">Loading…</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <div class="panel">
+      <h2>Battlefield And Hand</h2>
+      <div class="content zones" id="gameView"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Stack And Log</h2>
+      <div class="content">
+        <div id="stackView" class="content" style="padding:0 0 10px 0"></div>
+        <div class="log mono" id="log"></div>
+        <div class="hint">
+          Tip: tap lands to add mana, then tap a card in your hand to cast it. Use “Attack” then tap your attackers.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bottomBar">
+  <div class="actions">
+    <button class="primary" id="btnNew">New Game</button>
+    <button id="btnTapAll">Tap All Untapped Lands</button>
+    <button class="ok" id="btnAttack">Attack (Choose)</button>
+    <button id="btnNoBlocks">No Blocks</button>
+    <button class="primary" id="btnPass">Pass / Next</button>
+    <button class="warn" id="btnConcede">Concede</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---------- Utility ----------
+  const rnd = (n) => Math.floor(Math.random() * n);
+  const shuffle = (arr) => {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = rnd(i + 1);
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
+  const uid = (() => { let i = 1; return () => String(i++); })();
+
+  // ---------- Card Definitions (tiny pool) ----------
+  // Costs: string like "1R", "G", "2".
+  // Types: Land, Creature, Instant, Sorcery
+  const CARD_DB = {
+    Forest: {
+      name: "Forest",
+      type: "Basic Land — Forest",
+      text: "Tap: Add G.",
+      isLand: true,
+      produces: { G: 1 }
+    },
+    Mountain: {
+      name: "Mountain",
+      type: "Basic Land — Mountain",
+      text: "Tap: Add R.",
+      isLand: true,
+      produces: { R: 1 }
+    },
+    GrizzlyBears: {
+      name: "Grizzly Bears",
+      type: "Creature — Bear",
+      cost: "1G",
+      text: "",
+      power: 2, toughness: 2
+    },
+    HillGiant: {
+      name: "Hill Giant",
+      type: "Creature — Giant",
+      cost: "3R",
+      text: "",
+      power: 3, toughness: 3
+    },
+    LlanowarElves: {
+      name: "Llanowar Elves",
+      type: "Creature — Elf Druid",
+      cost: "G",
+      text: "Tap: Add G.",
+      power: 1, toughness: 1,
+      activated: { tap: true, addMana: { G: 1 } }
+    },
+    Shock: {
+      name: "Shock",
+      type: "Instant",
+      cost: "R",
+      text: "Deal 2 damage to any target.",
+      spell: { kind: "damage", amount: 2, speed: "instant", target: "any" }
+    },
+    LightningBolt: {
+      name: "Lightning Bolt",
+      type: "Instant",
+      cost: "R",
+      text: "Deal 3 damage to any target.",
+      spell: { kind: "damage", amount: 3, speed: "instant", target: "any" }
+    },
+    GiantGrowth: {
+      name: "Giant Growth",
+      type: "Instant",
+      cost: "G",
+      text: "Target creature gets +3/+3 until end of turn.",
+      spell: { kind: "pump", p: 3, t: 3, speed: "instant", target: "creature" }
+    },
+    LavaAxe: {
+      name: "Lava Axe",
+      type: "Sorcery",
+      cost: "4R",
+      text: "Deal 5 damage to target player.",
+      spell: { kind: "damagePlayer", amount: 5, speed: "sorcery", target: "player" }
+    }
+  };
+
+  function makeCard(key) {
+    const base = CARD_DB[key];
+    if (!base) throw new Error("Unknown card: " + key);
+    return {
+      id: uid(),
+      key,
+      name: base.name,
+      type: base.type,
+      text: base.text || "",
+      cost: base.cost || "",
+      isLand: !!base.isLand,
+      produces: base.produces || null,
+      power: base.power ?? null,
+      toughness: base.toughness ?? null,
+      damageMarked: 0,
+      tapped: false,
+      summoningSick: false,
+      tempBuff: { p: 0, t: 0 },
+      activated: base.activated || null,
+      spell: base.spell || null
+    };
+  }
+
+  // ---------- Core Rules (small but real) ----------
+  // - Turn structure: Untap, Draw, Main1, Combat (attackers/blockers/damage), Main2, End
+  // - Land play: 1 per turn in your main phases on your turn
+  // - Mana: tap lands (and elves) to add mana; spent to cast spells
+  // - Stack: instants can be cast in response; sorceries only in your main phases with empty stack
+  // - Combat: choose attackers; defending player chooses blocks; damage simultaneously
+  // - State-based: creatures die at 0 or less toughness (consider marked damage) -> graveyard
+  const PHASES = ["UNTAP", "DRAW", "MAIN1", "COMBAT", "MAIN2", "END"];
+  const speedAllows = (card, state) => {
+    if (card.isLand) return false;
+    const isInstant = card.type.includes("Instant");
+    const isSorcery = card.type.includes("Sorcery");
+    const isCreature = card.type.includes("Creature");
+
+    const isYourTurn = state.active === 0; // 0 = human, 1 = AI (we treat human as "player 0")
+    const inMain = (state.phase === "MAIN1" || state.phase === "MAIN2");
+    const stackEmpty = state.stack.length === 0;
+
+    if (isInstant) return true;
+    if (isSorcery || isCreature) return isYourTurn && inMain && stackEmpty;
+    return false;
+  };
+
+  function parseCost(cost) {
+    // e.g. "3R" => {C:3,R:1,G:0}
+    let c = 0, R = 0, G = 0;
+    const digits = cost.match(/\d+/);
+    if (digits) c = parseInt(digits[0], 10);
+    for (const ch of cost.replace(/\d+/g, "")) {
+      if (ch === "R") R++;
+      if (ch === "G") G++;
+    }
+    return { C: c, R, G };
+  }
+
+  function canPay(cost, pool) {
+    const need = parseCost(cost);
+    if ((pool.R || 0) < need.R) return false;
+    if ((pool.G || 0) < need.G) return false;
+    const colouredUsed = need.R + need.G;
+    const total = (pool.R || 0) + (pool.G || 0);
+    return total >= colouredUsed + need.C;
+  }
+
+  function pay(cost, pool) {
+    const need = parseCost(cost);
+    pool.R -= need.R; pool.G -= need.G;
+    let generic = need.C;
+    // pay generic with any remaining mana
+    while (generic > 0) {
+      if (pool.R > 0) { pool.R--; generic--; continue; }
+      if (pool.G > 0) { pool.G--; generic--; continue; }
+      break;
+    }
+  }
+
+  // ---------- Game State ----------
+  function newDeckRG() {
+    // Very small decks for speed; enough to feel like MTG.
+    const list = [
+      ...Array(10).fill("Forest"),
+      ...Array(10).fill("Mountain"),
+      ...Array(4).fill("LlanowarElves"),
+      ...Array(4).fill("GrizzlyBears"),
+      ...Array(3).fill("HillGiant"),
+      ...Array(4).fill("Shock"),
+      ...Array(3).fill("LightningBolt"),
+      ...Array(3).fill("GiantGrowth"),
+      ...Array(2).fill("LavaAxe"),
+    ];
+    return shuffle(list.map(makeCard));
+  }
+
+  function makePlayer(name, isAI=false) {
+    return {
+      name,
+      isAI,
+      life: 20,
+      library: newDeckRG(),
+      hand: [],
+      battlefield: [],
+      graveyard: [],
+      manaPool: { R: 0, G: 0 },
+      landPlaysLeft: 1,
+      attackers: new Set(),
+      blockers: new Map(), // attackerId -> blockerId
+      priority: false
+    };
+  }
+
+  let state = null;
+  let ui = {
+    selectedHandId: null,
+    selectingMode: null, // "ATTACKERS" | "BLOCKERS" | "TARGET"
+    pendingCast: null,   // {cardId, controller, chosenTarget}
+    message: ""
+  };
+
+  // ---------- Logging ----------
+  const logEl = document.getElementById("log");
+  function log(msg) {
+    if (!state) return;
+    state.log.push(msg);
+    // keep last 200 lines
+    if (state.log.length > 200) state.log = state.log.slice(-200);
+    render();
+  }
+
+  // ---------- Setup ----------
+  function draw(p, n=1) {
+    for (let i=0;i<n;i++) {
+      if (p.library.length === 0) {
+        // deck-out: lose
+        p.life = 0;
+        log(`${p.name} tried to draw from an empty library and loses.`);
+        return;
+      }
+      p.hand.push(p.library.pop());
+    }
+  }
+
+  function startGame() {
+    state = {
+      turn: 1,
+      active: 0, // 0 human starts
+      phaseIdx: 0,
+      phase: PHASES[0],
+      stack: [], // {card, controller, target}
+      log: []
+    };
+    ui = { selectedHandId: null, selectingMode: null, pendingCast: null, message: "" };
+
+    const human = makePlayer("You", false);
+    const ai = makePlayer("AI", true);
+    state.players = [human, ai];
+
+    // draw 7
+    draw(human, 7);
+    draw(ai, 7);
+
+    // No mulligans in MicroMTG (keep it fast)
+    log("Game start. You go first. (No mulligans in MicroMTG.)");
+    enterPhase("UNTAP");
+    render();
+  }
+
+  // ---------- Helpers ----------
+  const P = (i) => state.players[i];
+  const AP = () => P(state.active);
+  const NAP = () => P(1 - state.active);
+
+  function cardById(zone, id) { return zone.find(c => c.id === id) || null; }
+  function removeById(zone, id) {
+    const idx = zone.findIndex(c => c.id === id);
+    if (idx >= 0) return zone.splice(idx, 1)[0];
+    return null;
+  }
+
+  function totalPower(creature) { return (creature.power || 0) + (creature.tempBuff?.p || 0); }
+  function totalToughness(creature) { return (creature.toughness || 0) + (creature.tempBuff?.t || 0); }
+
+  function cleanupEndOfTurn(p) {
+    // remove temp buffs, clear damage, clear combat selections
+    for (const c of p.battlefield) {
+      c.tempBuff = { p: 0, t: 0 };
+      c.damageMarked = 0;
+      // summoning sickness wears off at begin of controller's turn, not EOT;
+      // we manage it in untap step.
+    }
+    p.attackers = new Set();
+    p.blockers = new Map();
+    p.manaPool.R = 0; p.manaPool.G = 0;
+  }
+
+  function stateBasedActions() {
+    for (const pl of state.players) {
+      // creatures dying
+      for (let i = pl.battlefield.length - 1; i >= 0; i--) {
+        const c = pl.battlefield[i];
+        if (!c.type.includes("Creature")) continue;
+        const t = totalToughness(c);
+        if (c.damageMarked >= t) {
+          pl.battlefield.splice(i, 1);
+          pl.graveyard.push(c);
+          log(`${pl.name}'s ${c.name} dies.`);
+        }
+      }
+    }
+  }
+
+  function isGameOver() {
+    if (!state) return false;
+    const h = P(0), a = P(1);
+    return h.life <= 0 || a.life <= 0;
+  }
+
+  function winnerText() {
+    const h = P(0), a = P(1);
+    if (h.life <= 0 && a.life <= 0) return "Draw game.";
+    if (h.life <= 0) return "You lose.";
+    if (a.life <= 0) return "You win!";
+    return "";
+  }
+
+  // ---------- Phases ----------
+  function enterPhase(phase) {
+    state.phase = phase;
+    state.phaseIdx = PHASES.indexOf(phase);
+
+    const ap = AP();
+
+    if (phase === "UNTAP") {
+      // Untap permanents, refresh land play, clear mana pool
+      ap.landPlaysLeft = 1;
+      ap.manaPool.R = 0; ap.manaPool.G = 0;
+      for (const c of ap.battlefield) {
+        c.tapped = false;
+        // summoning sickness: if it was sick, it becomes not sick at the start of its controller's next turn
+        if (c.type.includes("Creature")) c.summoningSick = false;
+      }
+      ap.attackers = new Set();
+      ap.blockers = new Map();
+      log(`— Turn ${state.turn}: ${ap.name} —`);
+      log(`${ap.name}: Untap.`);
+    }
+
+    if (phase === "DRAW") {
+      if (!(state.turn === 1 && state.active === 0)) {
+        draw(ap, 1);
+        log(`${ap.name} draws a card.`);
+      } else {
+        log("First player skips draw on turn 1 (MicroMTG rule).");
+      }
+    }
+
+    if (phase === "MAIN1") log(`${ap.name}: Main phase.`);
+    if (phase === "COMBAT") log(`${ap.name}: Combat.`);
+    if (phase === "MAIN2") log(`${ap.name}: Second main phase.`);
+    if (phase === "END") log(`${ap.name}: End step.`);
+  }
+
+  function advancePhase() {
+    // If stack non-empty, resolve first (top of stack)
+    if (state.stack.length > 0) {
+      resolveTopOfStack();
+      return;
+    }
+
+    // If in combat and attackers chosen, move through simple sub-steps internally:
+    // We model combat as:
+    // - active chooses attackers (human uses Attack mode; AI auto)
+    // - defending chooses blocks (human for defence; AI auto)
+    // - damage happens, then done.
+    if (state.phase === "COMBAT") {
+      doCombatIfReady();
+      return;
+    }
+
+    // Advance phase
+    state.phaseIdx++;
+    if (state.phaseIdx >= PHASES.length) {
+      // end turn
+      cleanupEndOfTurn(P(0));
+      cleanupEndOfTurn(P(1));
+      state.active = 1 - state.active;
+      if (state.active === 0) state.turn++;
+      state.phaseIdx = 0;
+    }
+    enterPhase(PHASES[state.phaseIdx]);
+
+    // AI take actions automatically on its turn
+    if (!isGameOver()) maybeRunAI();
+  }
+
+  // ---------- Casting / Stack ----------
+  function tapForMana(playerIndex, cardId) {
+    const pl = P(playerIndex);
+    const c = cardById(pl.battlefield, cardId);
+    if (!c || c.tapped) return false;
+
+    // Land
+    if (c.isLand && c.produces) {
+      c.tapped = true;
+      for (const k of Object.keys(c.produces)) pl.manaPool[k] = (pl.manaPool[k] || 0) + c.produces[k];
+      log(`${pl.name} taps ${c.name} for mana.`);
+      return true;
+    }
+
+    // Activated mana ability (elves)
+    if (c.activated && c.activated.addMana) {
+      c.tapped = true;
+      for (const k of Object.keys(c.activated.addMana)) pl.manaPool[k] = (pl.manaPool[k] || 0) + c.activated.addMana[k];
+      log(`${pl.name} taps ${c.name} for mana.`);
+      return true;
+    }
+
+    return false;
+  }
+
+  function playLand(playerIndex, handCardId) {
+    const pl = P(playerIndex);
+    const isYourTurn = (state.active === playerIndex);
+    const inMain = (state.phase === "MAIN1" || state.phase === "MAIN2");
+    const stackEmpty = state.stack.length === 0;
+    if (!isYourTurn || !inMain || !stackEmpty) return false;
+    if (pl.landPlaysLeft <= 0) return false;
+
+    const card = cardById(pl.hand, handCardId);
+    if (!card || !card.isLand) return false;
+
+    removeById(pl.hand, handCardId);
+    pl.battlefield.push(card);
+    pl.landPlaysLeft--;
+    log(`${pl.name} plays ${card.name}.`);
+    return true;
+  }
+
+  function beginCast(playerIndex, handCardId) {
+    const pl = P(playerIndex);
+    const card = cardById(pl.hand, handCardId);
+    if (!card || card.isLand) return false;
+    if (!speedAllows(card, state)) return false;
+    if (!canPay(card.cost, pl.manaPool)) return false;
+
+    // Determine target needs
+    if (card.spell && card.spell.target) {
+      ui.pendingCast = { cardId: handCardId, controller: playerIndex, chosenTarget: null };
+      ui.selectingMode = "TARGET";
+      ui.message = "Choose a target.";
+      render();
+      return true;
+    }
+
+    // No target spell (none in this pool)
+    return false;
+  }
+
+  function chooseTarget(target) {
+    // target is {kind:"player", playerIndex} or {kind:"creature", playerIndex, creatureId}
+    if (!ui.pendingCast) return;
+    ui.pendingCast.chosenTarget = target;
+    // finish cast
+    finishCast(ui.pendingCast.controller, ui.pendingCast.cardId, target);
+    ui.pendingCast = null;
+    ui.selectingMode = null;
+    ui.message = "";
+    render();
+  }
+
+  function finishCast(playerIndex, handCardId, target) {
+    const pl = P(playerIndex);
+    const card = removeById(pl.hand, handCardId);
+    if (!card) return false;
+
+    pay(card.cost, pl.manaPool);
+    state.stack.unshift({ card, controller: playerIndex, target }); // top at index 0
+    log(`${pl.name} casts ${card.name}.`);
+
+    // Give opponent a chance to respond if AI/human
+    maybeRunAIResponse();
+    return true;
+  }
+
+  function resolveTopOfStack() {
+    const item = state.stack.shift();
+    const { card, controller, target } = item;
+    const pl = P(controller);
+
+    // Creature spells become permanents
+    if (card.type.includes("Creature")) {
+      card.summoningSick = true;
+      pl.battlefield.push(card);
+      log(`${card.name} resolves and enters the battlefield.`);
+      stateBasedActions();
+      render();
+      return;
+    }
+
+    // Instants/Sorceries
+    if (card.spell) {
+      if (card.spell.kind === "damage") {
+        applyDamageAnyTarget(card.spell.amount, target);
+      } else if (card.spell.kind === "damagePlayer") {
+        applyDamagePlayer(card.spell.amount, target);
+      } else if (card.spell.kind === "pump") {
+        applyPump(card.spell.p, card.spell.t, target);
+      }
+    }
+    pl.graveyard.push(card);
+    log(`${card.name} resolves.`);
+    stateBasedActions();
+    render();
+  }
+
+  function applyDamageAnyTarget(amount, target) {
+    if (!target) return;
+    if (target.kind === "player") {
+      P(target.playerIndex).life -= amount;
+      log(`${P(target.playerIndex).name} takes ${amount} damage.`);
+    } else if (target.kind === "creature") {
+      const c = cardById(P(target.playerIndex).battlefield, target.creatureId);
+      if (c && c.type.includes("Creature")) {
+        c.damageMarked += amount;
+        log(`${c.name} takes ${amount} damage.`);
+      }
+    }
+  }
+
+  function applyDamagePlayer(amount, target) {
+    if (!target || target.kind !== "player") return;
+    P(target.playerIndex).life -= amount;
+    log(`${P(target.playerIndex).name} takes ${amount} damage.`);
+  }
+
+  function applyPump(p, t, target) {
+    if (!target || target.kind !== "creature") return;
+    const c = cardById(P(target.playerIndex).battlefield, target.creatureId);
+    if (c && c.type.includes("Creature")) {
+      c.tempBuff.p += p;
+      c.tempBuff.t += t;
+      log(`${c.name} gets +${p}/+${t} until end of turn.`);
+    }
+  }
+
+  // ---------- Combat ----------
+  function canAttackWith(creature) {
+    if (!creature.type.includes("Creature")) return false;
+    if (creature.tapped) return false;
+    if (creature.summoningSick) return false;
+    return true;
+  }
+
+  function toggleAttacker(creatureId) {
+    const ap = AP();
+    const c = cardById(ap.battlefield, creatureId);
+    if (!c || !canAttackWith(c)) return;
+    if (ap.attackers.has(creatureId)) ap.attackers.delete(creatureId);
+    else ap.attackers.add(creatureId);
+    render();
+  }
+
+  function toggleBlocker(blockerId, attackerId) {
+    const def = NAP();
+    const b = cardById(def.battlefield, blockerId);
+    if (!b || !b.type.includes("Creature") || b.tapped) return;
+    // one blocker per attacker, one attacker per blocker (simplified)
+    // remove previous assignment of blocker
+    for (const [atk, blk] of def.blockers.entries()) {
+      if (blk === blockerId) def.blockers.delete(atk);
+    }
+    if (def.blockers.get(attackerId) === blockerId) def.blockers.delete(attackerId);
+    else def.blockers.set(attackerId, blockerId);
+    render();
+  }
+
+  function doCombatIfReady() {
+    const ap = AP();
+    const def = NAP();
+
+    // If active player hasn't declared attackers yet and is AI, do it automatically.
+    if (ap.isAI && ap.attackers.size === 0) {
+      aiDeclareAttackers();
+      render();
+      return;
+    }
+
+    // If there are attackers and blocks not chosen yet for defending side, let AI auto-block.
+    const attackers = [...ap.attackers].map(id => cardById(ap.battlefield, id)).filter(Boolean);
+    if (attackers.length === 0) {
+      // no attackers -> move on
+      log("No attackers.");
+      // end combat -> go to MAIN2
+      state.phase = "MAIN2"; state.phaseIdx = PHASES.indexOf("MAIN2");
+      log(`${ap.name}: Second main phase.`);
+      maybeRunAI();
+      render();
+      return;
+    }
+
+    // If defending player is AI, choose blocks
+    if (def.isAI) {
+      aiDeclareBlockers(attackers);
+    } else {
+      // human defending: wait for "No Blocks" or assignments (we allow them to assign by tapping blockers)
+      // if they've not indicated they're done, just return and allow UI interactions.
+      if (ui.selectingMode === "BLOCKERS") return;
+      // If we aren't in blockers mode yet, enter it for human defence.
+      ui.selectingMode = "BLOCKERS";
+      ui.message = "Defend: tap a blocker, then tap an attacker to assign. Or press “No Blocks”.";
+      render();
+      return;
+    }
+
+    // Damage step (single)
+    combatDamage(attackers);
+    stateBasedActions();
+
+    // End combat
+    ui.selectingMode = null;
+    ui.message = "";
+    ap.attackers = new Set();
+    def.blockers = new Map();
+
+    // Go to MAIN2
+    state.phase = "MAIN2"; state.phaseIdx = PHASES.indexOf("MAIN2");
+    log(`${ap.name}: Second main phase.`);
+    maybeRunAI();
+    render();
+  }
+
+  function combatDamage(attackers) {
+    const ap = AP();
+    const def = NAP();
+
+    // tap attackers
+    for (const a of attackers) a.tapped = true;
+
+    for (const a of attackers) {
+      const blkId = def.blockers.get(a.id);
+      if (blkId) {
+        const b = cardById(def.battlefield, blkId);
+        if (b) {
+          const apow = totalPower(a);
+          const bpow = totalPower(b);
+          a.damageMarked += bpow;
+          b.damageMarked += apow;
+          log(`${a.name} (${apow}/${totalToughness(a)}) and ${b.name} (${bpow}/${totalToughness(b)}) deal damage to each other.`);
+        }
+      } else {
+        const dmg = totalPower(a);
+        def.life -= dmg;
+        log(`${a.name} deals ${dmg} damage to ${def.name}.`);
+      }
+    }
+  }
+
+  // ---------- AI ----------
+  function maybeRunAI() {
+    if (isGameOver()) return;
+    const ap = AP();
+    if (!ap.isAI) return;
+
+    // AI acts in its phases; very basic but functional.
+    if (state.phase === "MAIN1" || state.phase === "MAIN2") {
+      aiMainPhase();
+    }
+    if (state.phase === "COMBAT") {
+      aiDeclareAttackers();
+    }
+    if (state.phase === "END") {
+      // pass
+    }
+    render();
+  }
+
+  function aiTapAllLands() {
+    const ai = P(1);
+    for (const c of ai.battlefield) {
+      if (!c.tapped) {
+        if (c.isLand && c.produces) tapForMana(1, c.id);
+        else if (c.activated && c.activated.addMana) tapForMana(1, c.id);
+      }
+    }
+  }
+
+  function aiMainPhase() {
+    const ai = P(1);
+    const human = P(0);
+
+    // play land if possible
+    if (ai.landPlaysLeft > 0 && state.stack.length === 0) {
+      const land = ai.hand.find(c => c.isLand);
+      if (land) playLand(1, land.id);
+    }
+
+    // tap lands to cast something
+    aiTapAllLands();
+
+    // priority: kill lethal threats / face
+    // 1) If human low, try Lava Axe to win
+    const axe = ai.hand.find(c => c.key === "LavaAxe");
+    if (axe && speedAllows(axe, state) && canPay(axe.cost, ai.manaPool)) {
+      finishCast(1, axe.id, { kind:"player", playerIndex: 0 });
+      return;
+    }
+
+    // 2) Cast creatures if possible (prefer bigger)
+    const creature = ai.hand
+      .filter(c => c.type.includes("Creature"))
+      .sort((a,b) => (parseCost(b.cost).C + parseCost(b.cost).R + parseCost(b.cost).G) - (parseCost(a.cost).C + parseCost(a.cost).R + parseCost(a.cost).G))[0];
+    if (creature && speedAllows(creature, state) && canPay(creature.cost, ai.manaPool)) {
+      // creatures have no target
+      const card = removeById(ai.hand, creature.id);
+      pay(card.cost, ai.manaPool);
+      state.stack.unshift({ card, controller: 1, target: null });
+      log(`AI casts ${card.name}.`);
+      return;
+    }
+
+    // 3) Burn: try to kill a creature, else face
+    const burn = ai.hand.find(c => c.key === "LightningBolt" || c.key === "Shock");
+    if (burn && speedAllows(burn, state) && canPay(burn.cost, ai.manaPool)) {
+      // choose best creature to kill
+      const enemyCreatures = human.battlefield.filter(c => c.type.includes("Creature"));
+      const amount = burn.key === "LightningBolt" ? 3 : 2;
+      const killable = enemyCreatures.find(ec => (totalToughness(ec) - ec.damageMarked) <= amount);
+      const target = killable
+        ? { kind:"creature", playerIndex:0, creatureId: killable.id }
+        : { kind:"player", playerIndex:0 };
+      finishCast(1, burn.id, target);
+      return;
+    }
+
+    // else pass
+  }
+
+  function aiDeclareAttackers() {
+    const ai = P(1);
+    const human = P(0);
+    if (state.phase !== "COMBAT" || state.active !== 1) return;
+
+    ai.attackers = new Set();
+    const aiCreatures = ai.battlefield.filter(c => c.type.includes("Creature") && canAttackWith(c));
+    // simple: attack if it seems favourable or human is low
+    const aiPower = aiCreatures.reduce((s,c)=>s+totalPower(c),0);
+    if (human.life <= aiPower) {
+      aiCreatures.forEach(c => ai.attackers.add(c.id));
+      log("AI attacks with everything (lethal attempt).");
+      return;
+    }
+
+    // Otherwise attack with creatures that survive a block (rough heuristic)
+    const humanCreatures = human.battlefield.filter(c => c.type.includes("Creature"));
+    const biggestBlock = humanCreatures.sort((a,b)=>totalPower(b)-totalPower(a))[0];
+    for (const c of aiCreatures) {
+      if (!biggestBlock) { ai.attackers.add(c.id); continue; }
+      // if blocker power < our toughness, we might survive
+      if (totalPower(biggestBlock) < totalToughness(c)) ai.attackers.add(c.id);
+    }
+    if (ai.attackers.size > 0) log("AI declares attackers.");
+  }
+
+  function aiDeclareBlockers(attackers) {
+    const def = P(0); // if AI defending, def would be AI; in our call def.isAI, so def=NAP()
+    const ai = NAP();
+    const atkPlayer = AP();
+    if (!ai.isAI) return;
+
+    ai.blockers = new Map();
+    const blockers = ai.battlefield.filter(c => c.type.includes("Creature") && !c.tapped);
+    // greedy: try to trade up / avoid lethal
+    // Sort attackers by power desc
+    const sortedAtk = [...attackers].sort((a,b)=>totalPower(b)-totalPower(a));
+    for (const a of sortedAtk) {
+      const b = blockers.find(x => ![...ai.blockers.values()].includes(x.id));
+      if (!b) break;
+      ai.blockers.set(a.id, b.id);
+    }
+    if (ai.blockers.size > 0) log("AI blocks.");
+  }
+
+  function maybeRunAIResponse() {
+    // If human casts on their turn, AI may respond with an instant if it has one and can pay.
+    if (isGameOver()) return;
+    const ai = P(1);
+    if (!ai.isAI) return;
+    if (state.stack.length === 0) return;
+
+    // only respond sometimes, and only if it helps (very simple)
+    aiTapAllLands();
+    const top = state.stack[0];
+    const burn = ai.hand.find(c => (c.key === "LightningBolt" || c.key === "Shock") && canPay(c.cost, ai.manaPool));
+    if (!burn) return;
+
+    // if top spell is pump, try burn the pumped creature (not too clever)
+    // else if human has a creature that can be killed, do it; else face.
+    const human = P(0);
+    const amount = burn.key === "LightningBolt" ? 3 : 2;
+    const killable = human.battlefield.find(ec => ec.type.includes("Creature") && (totalToughness(ec) - ec.damageMarked) <= amount);
+    const target = killable
+      ? { kind:"creature", playerIndex:0, creatureId: killable.id }
+      : { kind:"player", playerIndex:0 };
+
+    // Instants can always be cast if payable
+    finishCast(1, burn.id, target);
+  }
+
+  // ---------- UI Rendering ----------
+  const statusPill = document.getElementById("statusPill");
+  const gameView = document.getElementById("gameView");
+  const stackView = document.getElementById("stackView");
+
+  function render() {
+    if (!state) return;
+
+    // Status
+    const ap = AP();
+    const def = NAP();
+    const status = isGameOver()
+      ? winnerText()
+      : `${ap.name} to act · Turn ${state.turn} · Phase: ${state.phase}${ui.message ? " · " + ui.message : ""}`;
+    statusPill.textContent = status;
+
+    // Stack
+    stackView.innerHTML = "";
+    if (state.stack.length === 0) {
+      stackView.innerHTML = `<div class="muted">Stack: (empty)</div>`;
+    } else {
+      const items = state.stack.map((it, idx) => {
+        const t = it.target
+          ? (it.target.kind === "player"
+            ? `→ ${P(it.target.playerIndex).name}`
+            : `→ ${cardById(P(it.target.playerIndex).battlefield, it.target.creatureId)?.name || "creature"}`
+          )
+          : "";
+        return `<div class="stackItem"><span class="badge">#${idx+1}</span> <strong>${it.card.name}</strong> <span class="muted">(${P(it.controller).name})</span> <span class="muted">${t}</span></div>`;
+      }).join("");
+      stackView.innerHTML = `<div class="muted" style="margin-bottom:8px">Stack (top first):</div>${items}`;
+    }
+
+    // Log
+    logEl.innerHTML = state.log.map(line => `<div>${escapeHtml(line)}</div>`).join("");
+
+    // Main view
+    gameView.innerHTML = "";
+
+    // Opponent zones (AI at top)
+    gameView.appendChild(renderPlayerSection(1, true));
+    // You zones (bottom)
+    gameView.appendChild(renderPlayerSection(0, false));
+
+    // Buttons enable/disable
+    document.getElementById("btnPass").disabled = isGameOver();
+    document.getElementById("btnAttack").disabled = isGameOver() || state.phase !== "COMBAT" || state.active !== 0;
+    document.getElementById("btnNoBlocks").disabled = isGameOver() || !(state.phase === "COMBAT" && state.active === 1 && ui.selectingMode === "BLOCKERS");
+  }
+
+  function renderPlayerSection(playerIndex, compact) {
+    const pl = P(playerIndex);
+    const wrap = document.createElement("div");
+    wrap.className = "zone";
+    wrap.innerHTML = `
+      <div class="zoneTitle">
+        <strong>${pl.name}</strong>
+        <span class="muted">Life: ${pl.life} · Hand: ${pl.hand.length} · Library: ${pl.library.length} · Mana: R${pl.manaPool.R||0} G${pl.manaPool.G||0} · Lands left: ${pl.landPlaysLeft}</span>
+      </div>
+    `;
+
+    // Battlefield
+    const bf = document.createElement("div");
+    bf.className = "cards";
+    const battlefield = pl.battlefield;
+    if (battlefield.length === 0) {
+      bf.innerHTML = `<div class="muted">(Battlefield empty)</div>`;
+    } else {
+      battlefield.forEach(c => bf.appendChild(renderCard(playerIndex, c, "battlefield")));
+    }
+
+    // Hand (only show yours)
+    const hand = document.createElement("div");
+    hand.className = "cards";
+    if (playerIndex === 0) {
+      if (pl.hand.length === 0) hand.innerHTML = `<div class="muted">(Hand empty)</div>`;
+      else pl.hand.forEach(c => hand.appendChild(renderCard(playerIndex, c, "hand")));
+    } else {
+      hand.innerHTML = `<div class="muted">(AI hand hidden)</div>`;
+    }
+
+    // Graveyard (compact list)
+    const gy = document.createElement("div");
+    gy.className = "muted";
+    const gyNames = pl.graveyard.slice(-6).map(c => c.name).join(", ");
+    gy.textContent = pl.graveyard.length ? `Graveyard (${pl.graveyard.length}): ${gyNames}${pl.graveyard.length>6?" …":""}` : "Graveyard: (empty)";
+
+    const row1 = document.createElement("div");
+    row1.className = "zoneRow";
+    const z1 = document.createElement("div");
+    z1.className = "zone";
+    z1.innerHTML = `<div class="zoneTitle"><strong>Battlefield</strong><span class="muted">${playerIndex===state.active ? "Active" : ""}</span></div>`;
+    z1.appendChild(bf);
+
+    const z2 = document.createElement("div");
+    z2.className = "zone";
+    z2.innerHTML = `<div class="zoneTitle"><strong>${playerIndex===0 ? "Hand" : "Hand"}</strong><span class="muted"></span></div>`;
+    z2.appendChild(hand);
+
+    row1.appendChild(z1);
+    row1.appendChild(z2);
+
+    wrap.appendChild(row1);
+    wrap.appendChild(gy);
+
+    return wrap;
+  }
+
+  function renderCard(controllerIndex, card, zone) {
+    const div = document.createElement("div");
+    div.className = "card" + (card.tapped ? " tap" : "") + (zone !== "hand" ? " small" : "");
+    const isCreature = card.type.includes("Creature");
+    const stats = isCreature ? `${totalPower(card)}/${totalToughness(card)}${card.damageMarked ? " (dmg " + card.damageMarked + ")" : ""}` : "";
+    const tags = [];
+    if (card.isLand) tags.push("Land");
+    if (isCreature && card.summoningSick) tags.push("Summoning sick");
+    if (controllerIndex === state.active && isCreature && P(controllerIndex).attackers?.has(card.id)) tags.push("Attacking");
+    const tagHtml = tags.map(t => `<span class="tag">${t}</span>`).join(" ");
+
+    div.innerHTML = `
+      <div class="name">${escapeHtml(card.name)}</div>
+      <div class="type">${escapeHtml(card.type)}</div>
+      <div class="text">${escapeHtml(card.text || "")}</div>
+      <div class="stats">
+        <span>${card.cost ? "Cost: " + escapeHtml(card.cost) : ""}</span>
+        <span>${stats}</span>
+      </div>
+      <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">${tagHtml}</div>
+    `;
+
+    div.addEventListener("click", () => onCardTap(controllerIndex, card.id, zone));
+    return div;
+  }
+
+  function onCardTap(controllerIndex, cardId, zone) {
+    if (!state || isGameOver()) return;
+
+    // Target selection mode
+    if (ui.selectingMode === "TARGET" && ui.pendingCast) {
+      // Determine legal targets based on pending card
+      const pendingCard = cardById(P(ui.pendingCast.controller).hand, ui.pendingCast.cardId);
+      if (!pendingCard) return;
+
+      const spell = pendingCard.spell;
+      if (!spell) return;
+
+      if (spell.target === "player") {
+        chooseTarget({ kind:"player", playerIndex: controllerIndex });
+        return;
+      }
+
+      if (spell.target === "any") {
+        if (zone === "battlefield") {
+          const c = cardById(P(controllerIndex).battlefield, cardId);
+          if (c && c.type.includes("Creature")) {
+            chooseTarget({ kind:"creature", playerIndex: controllerIndex, creatureId: cardId });
+          }
+        } else {
+          // clicking player area isn't a thing; so allow player target by tapping status pill? (handled separately)
+        }
+        return;
+      }
+
+      if (spell.target === "creature") {
+        if (zone === "battlefield") {
+          const c = cardById(P(controllerIndex).battlefield, cardId);
+          if (c && c.type.includes("Creature")) {
+            chooseTarget({ kind:"creature", playerIndex: controllerIndex, creatureId: cardId });
+          }
+        }
+        return;
+      }
+    }
+
+    // Combat attacker selection (human only)
+    if (state.phase === "COMBAT" && state.active === 0 && controllerIndex === 0 && zone === "battlefield" && ui.selectingMode === "ATTACKERS") {
+      toggleAttacker(cardId);
+      return;
+    }
+
+    // Combat blocker assignment (human defending)
+    if (state.phase === "COMBAT" && state.active === 1 && controllerIndex === 0 && zone === "battlefield" && ui.selectingMode === "BLOCKERS") {
+      // first tap chooses blocker, then tap attacker in opponent battlefield.
+      if (!ui._pickedBlocker) {
+        const b = cardById(P(0).battlefield, cardId);
+        if (!b || !b.type.includes("Creature") || b.tapped) return;
+        ui._pickedBlocker = cardId;
+        ui.message = "Now tap an attacker to assign this blocker.";
+        render();
+        return;
+      }
+      return;
+    }
+
+    // If picked blocker and now tapping an attacker (AI battlefield)
+    if (state.phase === "COMBAT" && state.active === 1 && controllerIndex === 1 && zone === "battlefield" && ui.selectingMode === "BLOCKERS" && ui._pickedBlocker) {
+      const attackerId = cardId;
+      toggleBlocker(ui._pickedBlocker, attackerId);
+      ui._pickedBlocker = null;
+      ui.message = "Assign more blocks, or press “No Blocks”.";
+      render();
+      return;
+    }
+
+    // Regular interactions: only human can direct tap on their cards
+    if (controllerIndex !== 0) return;
+
+    const you = P(0);
+
+    if (zone === "battlefield") {
+      // Tap for mana if yours
+      tapForMana(0, cardId);
+      render();
+      return;
+    }
+
+    if (zone === "hand") {
+      const card = cardById(you.hand, cardId);
+      if (!card) return;
+
+      // Land play
+      if (card.isLand) {
+        if (!playLand(0, cardId)) {
+          log("You can only play a land on your turn, in a main phase, with an empty stack, and only once per turn.");
+        }
+        render();
+        return;
+      }
+
+      // Begin cast (may require target)
+      if (!speedAllows(card, state)) {
+        log("You can’t cast that right now (timing restriction).");
+        render();
+        return;
+      }
+      if (!canPay(card.cost, you.manaPool)) {
+        log("Not enough mana. Tap lands first.");
+        render();
+        return;
+      }
+      beginCast(0, cardId);
+      return;
+    }
+  }
+
+  // Allow targeting players by tapping status pill when in TARGET mode
+  statusPill.addEventListener("click", () => {
+    if (!state || !ui.pendingCast) return;
+    const pendingCard = cardById(P(ui.pendingCast.controller).hand, ui.pendingCast.cardId);
+    if (!pendingCard || !pendingCard.spell) return;
+    const t = pendingCard.spell.target;
+    if (t === "player" || t === "any") {
+      // default: target opponent when you tap status
+      const opp = 1 - ui.pendingCast.controller;
+      chooseTarget({ kind:"player", playerIndex: opp });
+    }
+  });
+
+  // ---------- Buttons ----------
+  document.getElementById("btnNew").addEventListener("click", startGame);
+
+  document.getElementById("btnTapAll").addEventListener("click", () => {
+    if (!state || isGameOver()) return;
+    const you = P(0);
+    for (const c of you.battlefield) {
+      if (!c.tapped) tapForMana(0, c.id);
+    }
+    render();
+  });
+
+  document.getElementById("btnAttack").addEventListener("click", () => {
+    if (!state || isGameOver()) return;
+    if (!(state.phase === "COMBAT" && state.active === 0)) return;
+    ui.selectingMode = (ui.selectingMode === "ATTACKERS") ? null : "ATTACKERS";
+    ui.message = ui.selectingMode ? "Tap your creatures to choose attackers, then press Pass / Next." : "";
+    render();
+  });
+
+  document.getElementById("btnNoBlocks").addEventListener("click", () => {
+    if (!state || isGameOver()) return;
+    if (!(state.phase === "COMBAT" && state.active === 1 && ui.selectingMode === "BLOCKERS")) return;
+    ui.selectingMode = null;
+    ui._pickedBlocker = null;
+    ui.message = "";
+    log("No blocks declared.");
+    // proceed to damage
+    doCombatIfReady();
+  });
+
+  document.getElementById("btnPass").addEventListener("click", () => {
+    if (!state || isGameOver()) return;
+
+    // If you're choosing attackers and press pass, lock them in and proceed.
+    if (state.phase === "COMBAT" && state.active === 0 && ui.selectingMode === "ATTACKERS") {
+      ui.selectingMode = null;
+      ui.message = "";
+      log("Attackers locked in.");
+      // Now defending player will block / no blocks
+      doCombatIfReady();
+      return;
+    }
+
+    // If targeting is pending, do nothing (force target)
+    if (ui.selectingMode === "TARGET") {
+      log("Choose a target first. (Tip: tap a creature, or tap the status pill to target the opponent.)");
+      return;
+    }
+
+    advancePhase();
+    render();
+  });
+
+  document.getElementById("btnConcede").addEventListener("click", () => {
+    if (!state) return;
+    P(0).life = 0;
+    log("You concede.");
+    render();
+  });
+
+  // ---------- HTML escape ----------
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+    }[c]));
+  }
+
+  // ---------- Boot ----------
+  startGame();
+
+  // Optional: register service worker if hosted over https (see sw.js below)
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>
