@@ -2,316 +2,261 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Mobile: Final Combat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>MTG Mobile Final</title>
     <style>
-        :root { --bg: #121212; --card-bg: #2a2a2e; --text: #e0e0e0; --accent: #3a7bd5; --danger: #ff4444; --win: #00ff88; }
+        :root { --bg: #121212; --card-bg: #2a2a2e; --text: #e0e0e0; --accent: #3a7bd5; --danger: #ff4444; --win: #00ff88; --header-h: 44px; --footer-h: 150px; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
-        body, html { 
-            margin: 0; padding: 0; height: 100vh; width: 100vw; 
+        /* THE CRITICAL FIX: Position Fixed prevents the bounce/overflow issues */
+        html, body { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
             overflow: hidden; background: var(--bg); color: var(--text); 
-            font-family: -apple-system, sans-serif; display: flex; flex-direction: column;
+            font-family: -apple-system, system-ui, sans-serif;
+            position: fixed; 
+        }
+
+        #app-wrapper {
+            display: flex; flex-direction: column;
+            width: 100%; height: 100%;
         }
 
         #header { 
-            flex-shrink: 0; height: 44px; background: #000; display: flex; align-items: center; 
-            justify-content: space-around; border-bottom: 2px solid var(--accent); font-size: 11px; font-weight: bold; 
+            height: var(--header-h); background: #000; display: flex; align-items: center; 
+            justify-content: space-around; border-bottom: 2px solid var(--accent); font-size: 10px; font-weight: bold; flex-shrink: 0;
         }
-        .phase-dot { opacity: 0.3; padding: 5px; transition: 0.3s; }
+        .phase-dot { opacity: 0.3; transition: 0.3s; }
         .phase-dot.active { opacity: 1; color: #00d4ff; border-bottom: 2px solid #00d4ff; }
 
-        #main-scroller { flex-grow: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-        #footer { flex-shrink: 0; background: #1a1a1a; border-top: 1px solid #444; padding-bottom: env(safe-area-inset-bottom); }
+        /* SCROLLABLE AREA: Middle section takes all remaining space */
+        #main-scroller { 
+            flex: 1; overflow-y: scroll; -webkit-overflow-scrolling: touch;
+            padding: 10px; display: flex; flex-direction: column; gap: 5px;
+        }
 
-        .zone { display: flex; gap: 8px; overflow-x: auto; padding: 5px 0; min-height: 115px; align-items: center; border-bottom: 1px solid #333; }
-        .label { font-size: 10px; color: #777; text-transform: uppercase; margin-top: 5px; }
+        #footer { 
+            height: var(--footer-h); background: #1a1a1a; border-top: 1px solid #444; 
+            flex-shrink: 0; display: flex; flex-direction: column;
+        }
+
+        /* Zones */
+        .zone { display: flex; gap: 8px; overflow-x: auto; padding: 5px 0; min-height: 110px; align-items: center; }
+        .label { font-size: 10px; color: #777; text-transform: uppercase; margin-top: 10px; font-weight: bold; }
         
         .card { 
-            width: 82px; height: 115px; background: var(--card-bg); border: 2px solid #555; border-radius: 6px; 
-            flex-shrink: 0; display: flex; flex-direction: column; padding: 5px; font-size: 10px; position: relative; transition: 0.2s;
+            width: 78px; height: 110px; background: var(--card-bg); border: 2px solid #555; border-radius: 6px; 
+            flex-shrink: 0; display: flex; flex-direction: column; padding: 5px; font-size: 9px; position: relative;
         }
-        .card.tapped { transform: rotate(5deg); opacity: 0.6; filter: grayscale(0.5); border-color: #444; }
-        .card.attacking { border-color: #ffaa00; box-shadow: 0 0 10px #ffaa00; transform: translateY(-5px); }
-        .card.blocking { border-color: var(--win); box-shadow: 0 0 10px var(--win); transform: translateY(-10px); }
+        .card.tapped { transform: rotate(5deg) translateY(4px); opacity: 0.6; filter: grayscale(0.5); }
+        .card.attacking { border-color: #ffaa00; box-shadow: 0 0 8px #ffaa00; }
+        .card.blocking { border-color: var(--win); box-shadow: 0 0 8px var(--win); transform: translateY(-5px); }
         .card.land-card { background: #1e2b1e; border-color: #3e5b3e; }
 
-        .card-header { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 2px; border-bottom: 1px solid #444; }
-        .card-stats { position: absolute; bottom: 4px; right: 6px; font-weight: bold; background: #000; padding: 1px 4px; border-radius: 3px; border: 1px solid #555; }
+        .card-header { display: flex; justify-content: space-between; font-weight: bold; border-bottom: 1px solid #444; padding-bottom: 2px; }
+        .card-stats { position: absolute; bottom: 3px; right: 5px; font-weight: bold; background: #000; padding: 1px 3px; border-radius: 2px; }
 
-        #log { height: 60px; font-size: 11px; padding: 8px; background: #000; color: #4af; overflow-y: auto; border-bottom: 1px solid #333; line-height: 1.4; }
-        .stats-bar { display: flex; justify-content: space-between; padding: 8px 15px; font-size: 13px; font-weight: bold; background: #111; }
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; }
-        button { padding: 15px; border: none; border-radius: 8px; background: var(--accent); color: white; font-weight: bold; font-size: 14px; }
+        /* Log & Controls */
+        #log { flex: 1; font-size: 11px; padding: 8px; background: #000; color: #4af; overflow-y: auto; line-height: 1.3; border-bottom: 1px solid #333; }
+        .stats-bar { display: flex; justify-content: space-between; padding: 5px 15px; font-size: 12px; font-weight: bold; }
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+        button { padding: 12px; border: none; border-radius: 6px; background: var(--accent); color: white; font-weight: bold; font-size: 13px; }
         button:disabled { background: #333; color: #666; }
         #btn-next { background: #28a745; }
 
-        /* Overlay */
         #overlay { 
-            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); 
-            z-index: 1000; flex-direction: column; align-items: center; justify-content: center; text-align: center; 
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); 
+            z-index: 9999; flex-direction: column; align-items: center; justify-content: center; 
         }
-        #overlay h1 { font-size: 3rem; margin: 0; }
-        #overlay button { margin-top: 20px; width: 200px; }
     </style>
 </head>
 <body>
 
 <div id="overlay">
     <h1 id="win-text">YOU WIN</h1>
-    <p id="win-details">The opponent has fallen.</p>
     <button onclick="location.reload()">Play Again</button>
 </div>
 
-<div id="header">
-    <span id="p-0" class="phase-dot">MAIN 1</span>
-    <span id="p-1" class="phase-dot">ATTACK</span>
-    <span id="p-2" class="phase-dot">BLOCK</span>
-    <span id="p-3" class="phase-dot">MAIN 2</span>
-</div>
-
-<div id="main-scroller">
-    <div class="label">AI Life: <span id="ai-hp" style="color:var(--danger)">20</span></div>
-    <div class="zone" id="ai-field"></div>
-    
-    <div class="label">Your Life: <span id="p-hp" style="color:var(--win)">20</span></div>
-    <div class="zone" id="player-field"></div>
-    
-    <div class="label">Your Hand</div>
-    <div class="zone" id="player-hand"></div>
-</div>
-
-<div id="footer">
-    <div id="log">Game Start. Tap a land for mana.</div>
-    <div class="stats-bar">
-        <span>MANA: <b id="p-mana">0</b></span>
-        <span>AI HAND: <b id="ai-count">0</b></span>
+<div id="app-wrapper">
+    <div id="header">
+        <span id="p-0" class="phase-dot">MAIN 1</span>
+        <span id="p-1" class="phase-dot">ATTACK</span>
+        <span id="p-2" class="phase-dot">BLOCK</span>
+        <span id="p-3" class="phase-dot">MAIN 2</span>
     </div>
-    <div class="btn-group">
-        <button id="btn-land" onclick="playLand()">Land</button>
-        <button id="btn-next" onclick="nextPhase()">Next Phase</button>
+
+    <div id="main-scroller">
+        <div class="label">AI HP: <span id="ai-hp" style="color:var(--danger)">20</span></div>
+        <div class="zone" id="ai-field"></div>
+        
+        <div class="label">YOU HP: <span id="p-hp" style="color:var(--win)">20</span></div>
+        <div class="zone" id="player-field"></div>
+        
+        <div class="label">YOUR HAND</div>
+        <div class="zone" id="player-hand"></div>
+        <div style="height: 20px;"></div>
+    </div>
+
+    <div id="footer">
+        <div id="log">Game Loading...</div>
+        <div class="stats-bar">
+            <span>MANA: <b id="p-mana">0</b></span>
+            <span>AI HAND: <b id="ai-count">0</b></span>
+        </div>
+        <div class="btn-group">
+            <button id="btn-land" onclick="playLand()">Land</button>
+            <button id="btn-next" onclick="nextPhase()">Next Phase</button>
+        </div>
     </div>
 </div>
 
 <script>
-// --- Card Library ---
+// --- Data ---
 const DB = [
-    { name: "Forest", type: "land", cost: 0, p: 0, t: 0, desc: "{T}: +1 Mana" },
-    { name: "Soldier", type: "creature", cost: 1, p: 1, t: 1, desc: "Fast" },
-    { name: "Knight", type: "creature", cost: 2, p: 2, t: 2, desc: "Strong" },
-    { name: "Giant", type: "creature", cost: 4, p: 4, t: 4, desc: "Crusher" }
+    { name: "Forest", type: "land", cost: 0, p: 0, t: 0, desc: "{T}: +1" },
+    { name: "Elf", type: "creature", cost: 1, p: 1, t: 1, desc: "Swift" },
+    { name: "Warrior", type: "creature", cost: 2, p: 2, t: 2, desc: "Strong" },
+    { name: "Beast", type: "creature", cost: 4, p: 4, t: 4, desc: "Giant" }
 ];
 
-let state = {
+let s = {
     p_hp: 20, p_hand: [], p_field: [], p_mana: 0, p_landPlayed: false,
     ai_hp: 20, ai_hand: [], ai_field: [],
-    phase: 0, isAITurn: false, attackers: [], blockers: [], gameOver: false
+    phase: 0, isAI: false, attackers: [], blockers: []
 };
 
 function init() {
     for(let i=0; i<7; i++) {
-        state.p_hand.push({...DB[Math.floor(Math.random()*3)], id: Math.random()});
-        state.ai_hand.push({...DB[Math.floor(Math.random()*3)], id: Math.random()});
+        s.p_hand.push({...DB[Math.floor(Math.random()*3)], id: Math.random()});
+        s.ai_hand.push({...DB[Math.floor(Math.random()*3)], id: Math.random()});
     }
-    // Give AI a starting creature so it attacks sooner
-    state.ai_field.push({...DB[1], id: Math.random(), tapped: false, sick: false});
+    // Boost AI so it's a threat
+    s.ai_field.push({...DB[1], id: Math.random(), sick: false});
+    msg("Welcome. Tap a Forest for mana, then play a creature.");
     render();
 }
 
-function checkGameOver() {
-    if (state.ai_hp <= 0 || state.p_hp <= 0) {
-        state.gameOver = true;
-        const ov = document.getElementById('overlay');
-        const txt = document.getElementById('win-text');
-        ov.style.display = 'flex';
-        if (state.ai_hp <= 0) {
-            txt.innerText = "YOU WIN!";
-            txt.style.color = "var(--win)";
-        } else {
-            txt.innerText = "YOU LOSE";
-            txt.style.color = "var(--danger)";
-        }
-    }
-}
-
 function render() {
-    if (state.gameOver) return;
-    document.getElementById('p-hp').innerText = state.p_hp;
-    document.getElementById('ai-hp').innerText = state.ai_hp;
-    document.getElementById('p-mana').innerText = state.p_mana;
-    document.getElementById('ai-count').innerText = state.ai_hand.length;
+    document.getElementById('p-hp').innerText = s.p_hp;
+    document.getElementById('ai-hp').innerText = s.ai_hp;
+    document.getElementById('p-mana').innerText = s.p_mana;
+    document.getElementById('ai-count').innerText = s.ai_hand.length;
 
     document.querySelectorAll('.phase-dot').forEach((el, i) => {
-        el.className = (i === state.phase) ? "phase-dot active" : "phase-dot";
+        el.className = (i === s.phase) ? "phase-dot active" : "phase-dot";
     });
 
-    drawZone('player-hand', state.p_hand, 'hand');
-    drawZone('player-field', state.p_field, 'field');
-    drawZone('ai-field', state.ai_field, 'ai');
+    draw('player-hand', s.p_hand, 'hand');
+    draw('player-field', s.p_field, 'field');
+    draw('ai-field', s.ai_field, 'ai');
 
-    document.getElementById('btn-land').disabled = state.p_landPlayed || state.phase !== 0 || state.isAITurn;
-    
-    let btn = document.getElementById('btn-next');
-    if (state.isAITurn && state.phase === 2) {
-        btn.innerText = "Confirm Blocks";
-        btn.disabled = false;
-    } else {
-        btn.innerText = state.phase === 3 ? "End Turn" : "Next Phase";
-        btn.disabled = state.isAITurn;
+    document.getElementById('btn-land').disabled = s.p_landPlayed || s.phase !== 0 || s.isAI;
+    let b = document.getElementById('btn-next');
+    b.disabled = (s.isAI && s.phase !== 2);
+    b.innerText = (s.isAI && s.phase === 2) ? "Confirm Blocks" : (s.phase === 3 ? "End Turn" : "Next Phase");
+
+    if (s.p_hp <= 0 || s.ai_hp <= 0) {
+        document.getElementById('overlay').style.display = 'flex';
+        document.getElementById('win-text').innerText = s.p_hp <= 0 ? "DEFEAT" : "VICTORY";
     }
-    checkGameOver();
 }
 
-function drawZone(id, cards, type) {
+function draw(id, cards, type) {
     const el = document.getElementById(id);
     el.innerHTML = '';
     cards.forEach(c => {
         const div = document.createElement('div');
-        const isAttacking = state.attackers.includes(c.id);
-        const isBlocking = state.blockers.includes(c.id);
-        
-        div.className = `card ${c.type==='land'?'land-card':''} ${c.tapped?'tapped':''} ${isAttacking?'attacking':''} ${isBlocking?'blocking':''}`;
+        const atk = s.attackers.includes(c.id);
+        const blk = s.blockers.includes(c.id);
+        div.className = `card ${c.type==='land'?'land-card':''} ${c.tapped?'tapped':''} ${atk?'attacking':''} ${blk?'blocking':''}`;
         div.innerHTML = `<div class="card-header"><span>${c.name}</span><span>${c.type==='creature'?c.cost:''}</span></div>
-                         <div style="font-size:8px; margin-top:5px; color:#aaa">${c.desc}</div>
+                         <div style="font-size:8px; margin-top:4px; color:#aaa">${c.desc}</div>
                          ${c.type==='creature'?`<div class="card-stats">${c.p}/${c.t}</div>`:''}`;
-        
-        div.onclick = () => handleTap(c, type);
+        div.onclick = () => handle(c, type);
         el.appendChild(div);
     });
 }
 
-function handleTap(card, zone) {
-    if (state.isAITurn && state.phase !== 2) return;
-
-    if (zone === 'hand' && state.phase === 0) {
-        if (card.type === 'land' && !state.p_landPlayed) {
-            state.p_field.push({...card, tapped: false, sick: false});
-            state.p_hand = state.p_hand.filter(x => x.id !== card.id);
-            state.p_landPlayed = true;
-        } else if (card.type === 'creature' && state.p_mana >= card.cost) {
-            state.p_mana -= card.cost;
-            state.p_field.push({...card, tapped: false, sick: true});
-            state.p_hand = state.p_hand.filter(x => x.id !== card.id);
+function handle(c, zone) {
+    if (s.isAI && s.phase !== 2) return;
+    if (zone === 'hand' && s.phase === 0) {
+        if (c.type === 'land' && !s.p_landPlayed) {
+            s.p_field.push({...c, sick: false});
+            s.p_hand = s.p_hand.filter(x => x.id !== c.id);
+            s.p_landPlayed = true;
+        } else if (c.type === 'creature' && s.p_mana >= c.cost) {
+            s.p_mana -= c.cost;
+            s.p_field.push({...c, sick: true});
+            s.p_hand = s.p_hand.filter(x => x.id !== c.id);
         }
     } else if (zone === 'field') {
-        if (card.type === 'land' && !card.tapped) {
-            card.tapped = true; state.p_mana++;
-        } else if (card.type === 'creature' && state.phase === 1) { // Player Attacking
-            if (!card.sick && !card.tapped) {
-                if (state.attackers.includes(card.id)) state.attackers = state.attackers.filter(id => id !== card.id);
-                else state.attackers.push(card.id);
-            }
-        } else if (card.type === 'creature' && state.phase === 2 && state.isAITurn) { // Player Blocking
-            if (!card.tapped) {
-                if (state.blockers.includes(card.id)) state.blockers = state.blockers.filter(id => id !== card.id);
-                else state.blockers.push(card.id);
-            }
+        if (c.type === 'land' && !c.tapped) { c.tapped = true; s.p_mana++; }
+        else if (c.type === 'creature' && s.phase === 1 && !c.sick && !c.tapped) {
+            if (s.attackers.includes(c.id)) s.attackers = s.attackers.filter(id => id !== c.id);
+            else s.attackers.push(c.id);
+        } else if (c.type === 'creature' && s.phase === 2 && s.isAI && !c.tapped) {
+            if (s.blockers.includes(c.id)) s.blockers = s.blockers.filter(id => id !== c.id);
+            else s.blockers.push(c.id);
         }
     }
     render();
 }
 
-function log(m) {
+function msg(m) {
     const l = document.getElementById('log');
     l.innerHTML = `> ${m}<br>${l.innerHTML}`;
 }
 
 async function nextPhase() {
-    if (state.phase === 1) { // Resolve Player Attack
-        state.phase = 2;
-        let dmg = 0;
-        state.attackers.forEach(id => {
-            let c = state.p_field.find(x => x.id === id);
-            c.tapped = true;
-            let aiBlocker = state.ai_field.find(x => x.type === 'creature' && !x.tapped);
-            if (aiBlocker) {
-                log(`AI blocked with ${aiBlocker.name}`);
-                aiBlocker.tapped = true;
-                if (aiBlocker.p >= c.t) state.p_field = state.p_field.filter(x=>x.id!==c.id);
-                if (c.p >= aiBlocker.t) state.ai_field = state.ai_field.filter(x=>x.id!==aiBlocker.id);
-            } else {
-                dmg += c.p;
-            }
+    if (s.phase === 1) { // Player Attack Resolve
+        s.phase = 2;
+        let d = 0;
+        s.attackers.forEach(id => {
+            let pC = s.p_field.find(x => x.id === id); pC.tapped = true;
+            let aiB = s.ai_field.find(x => x.type === 'creature' && !x.tapped);
+            if (aiB) {
+                msg(`AI blocks with ${aiB.name}`); aiB.tapped = true;
+                if (aiB.p >= pC.t) s.p_field = s.p_field.filter(x=>x.id!==pC.id);
+                if (pC.p >= aiB.t) s.ai_field = s.ai_field.filter(x=>x.id!==aiB.id);
+            } else { d += pC.p; }
         });
-        state.ai_hp -= dmg;
-        state.attackers = [];
-        log(`You dealt ${dmg} damage.`);
-        state.phase = 3;
-    } else if (state.isAITurn && state.phase === 2) { // Resolve AI Attack (User blocked)
-        let dmg = 0;
-        state.attackers.forEach((id, index) => {
-            let aiC = state.ai_field.find(x => x.id === id);
-            let pBlockerId = state.blockers[index]; 
-            if (pBlockerId) {
-                let pC = state.p_field.find(x => x.id === pBlockerId);
-                log(`Blocked ${aiC.name} with ${pC.name}`);
-                pC.tapped = true;
-                if (pC.p >= aiC.t) state.ai_field = state.ai_field.filter(x=>x.id!==aiC.id);
-                if (aiC.p >= pC.t) state.p_field = state.p_field.filter(x=>x.id!==pC.id);
-            } else {
-                dmg += aiC.p;
-            }
+        s.ai_hp -= d; s.attackers = []; s.phase = 3;
+        msg(`Dealt ${d} damage.`);
+    } else if (s.isAI && s.phase === 2) { // AI Attack Resolve
+        let d = 0;
+        s.attackers.forEach((id, i) => {
+            let aiC = s.ai_field.find(x => x.id === id);
+            let bId = s.blockers[i];
+            if (bId) {
+                let pC = s.p_field.find(x => x.id === bId); pC.tapped = true;
+                if (pC.p >= aiC.t) s.ai_field = s.ai_field.filter(x=>x.id!==aiC.id);
+                if (aiC.p >= pC.t) s.p_field = s.p_field.filter(x=>x.id!==pC.id);
+            } else { d += aiC.p; }
         });
-        state.p_hp -= dmg;
-        log(`AI dealt ${dmg} total.`);
-        endAITurn();
-    } else if (state.phase === 3) {
-        startAITurn();
-    } else {
-        state.phase++;
-    }
+        s.p_hp -= d; msg(`AI dealt ${d} damage.`);
+        s.isAI = false; s.phase = 0; s.attackers = []; s.blockers = []; s.p_mana = 0; s.p_landPlayed = false;
+        s.p_field.forEach(c => { c.tapped = false; c.sick = false; });
+        s.p_hand.push({...DB[Math.floor(Math.random()*DB.length)], id: Math.random()});
+        msg("Your Turn.");
+    } else if (s.phase === 3) {
+        startAI();
+    } else { s.phase++; }
     render();
 }
 
-async function startAITurn() {
-    state.isAITurn = true;
-    state.phase = 0;
-    render();
-    log("AI Beginning Turn...");
-    await new Promise(r => setTimeout(r, 800));
-
-    // Draw & Untap
-    state.ai_field.forEach(c => { c.tapped = false; c.sick = false; });
-    state.ai_hand.push({...DB[Math.floor(Math.random()*DB.length)], id: Math.random()});
-    
-    // AI Play Logic
-    let lands = state.ai_field.filter(x=>x.type==='land').length;
-    let lIdx = state.ai_hand.findIndex(x=>x.type==='land');
-    if(lIdx > -1) {
-        state.ai_field.push({...state.ai_hand.splice(lIdx, 1)[0], tapped: false, sick: false});
-        log("AI played a Land.");
-    }
-    
-    let cIdx = state.ai_hand.findIndex(x=>x.type==='creature' && x.cost <= lands);
-    if(cIdx > -1) {
-        state.ai_field.push({...state.ai_hand.splice(cIdx, 1)[0], tapped: false, sick: true});
-        log("AI cast a creature.");
-    }
-
-    // AI Attack Logic: Attack with everything that isn't sick
-    let attackers = state.ai_field.filter(x => x.type==='creature' && !x.sick);
-    if (attackers.length > 0) {
-        state.phase = 2;
-        state.attackers = attackers.map(x => x.id);
-        attackers.forEach(a => a.tapped = true);
-        log("AI Attacks! Tap your creatures to BLOCK, then 'Confirm'.");
-    } else {
-        log("AI has no valid attackers.");
-        endAITurn();
-    }
-    render();
-}
-
-function endAITurn() {
-    state.isAITurn = false;
-    state.phase = 0;
-    state.attackers = [];
-    state.blockers = [];
-    state.p_mana = 0;
-    state.p_landPlayed = false;
-    state.p_field.forEach(c => { c.tapped = false; c.sick = false; });
-    state.p_hand.push({...DB[Math.floor(Math.random()*DB.length)], id: Math.random()});
-    log("Your turn. Untap & Draw.");
+async function startAI() {
+    s.isAI = true; s.phase = 0; render();
+    msg("AI Thinking...");
+    await new Promise(r => setTimeout(r, 600));
+    s.ai_field.forEach(c => { c.tapped = false; c.sick = false; });
+    s.ai_hand.push({...DB[Math.floor(Math.random()*DB.length)], id: Math.random()});
+    let l = s.ai_field.filter(x=>x.type==='land').length;
+    let li = s.ai_hand.findIndex(x=>x.type==='land'); if(li > -1) s.ai_field.push({...s.ai_hand.splice(li, 1)[0], sick: false});
+    let ci = s.ai_hand.findIndex(x=>x.type==='creature' && x.cost <= l); if(ci > -1) s.ai_field.push({...s.ai_hand.splice(ci, 1)[0], sick: true});
+    let atks = s.ai_field.filter(x => x.type==='creature' && !x.sick);
+    if (atks.length > 0) {
+        s.phase = 2; s.attackers = atks.map(x => x.id); atks.forEach(a => a.tapped = true);
+        msg("AI Attacks! Tap your creatures to BLOCK, then Confirm.");
+    } else { s.isAI = false; s.phase = 0; s.p_mana = 0; s.p_landPlayed = false; s.p_field.forEach(c => { c.tapped = false; c.sick = false; }); s.p_hand.push({...DB[Math.floor(Math.random()*DB.length)], id: Math.random()}); msg("Your Turn."); }
     render();
 }
 
